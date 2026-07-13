@@ -288,8 +288,13 @@
             <input type="file" id="bgImage" accept="image/*">
           </label>
         </div>
-        <label style="margin-top:12px">Box outline color</label>
-        <input type="color" id="frameColor" />
+        <label style="display:flex;align-items:center;gap:8px;margin-top:14px;color:var(--ink);cursor:pointer">
+          <input type="checkbox" id="blendToggle"> Blend board into background (no frame)
+        </label>
+        <div id="frameColorWrap">
+          <label style="margin-top:12px">Box outline color</label>
+          <input type="color" id="frameColor" />
+        </div>
       </div>
 
       <!-- MUSIC -->
@@ -387,7 +392,7 @@ function defaultConfig(){
   }
   return {
     slots,
-    theme:{ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63" },
+    theme:{ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63", blend:true },
     ball:{ radius:15, color:"#ffd93d", image:"" },
     volume:0.6
   };
@@ -400,7 +405,7 @@ function loadConfig(){
       const c = JSON.parse(raw);
       if(c && Array.isArray(c.slots) && c.slots.length>=2){
         // Normalize older saved configs (pre-ball-customization / pre-inventory).
-        c.theme = Object.assign({ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63" }, c.theme||{});
+        c.theme = Object.assign({ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63", blend:true }, c.theme||{});
         c.ball  = Object.assign({ radius:15, color:"#ffd93d", image:"" }, c.ball||{});
         c.slots.forEach((s,i)=>{                    // ensure every slot has inventory + a color
           if(s.inventory == null) s.inventory = 5;
@@ -597,26 +602,37 @@ function stepPhysics(){
 function drawBoard(){
   ctx.clearRect(0,0,BOARD_W,BOARD_H);
 
-  // ---- Cabinet outer frame (the solid walls of the box) ----
-  roundRect(ctx, 1,1, BOARD_W-2, BOARD_H-2, 26);
-  const frame = ctx.createLinearGradient(0,0,BOARD_W,BOARD_H);
-  frame.addColorStop(0,"#3b2350");
-  frame.addColorStop(.5,"#241636");
-  frame.addColorStop(1,"#3b2350");
-  ctx.fillStyle = frame; ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = (config.theme && config.theme.frameColor) || "#ff2e63"; ctx.stroke();   // cabinet trim (configurable)
-  // inner bevel highlight around the frame
-  roundRect(ctx, 4,4, BOARD_W-8, BOARD_H-8, 23);
-  ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.stroke();
+  // Blend mode: no cabinet frame/outline, and a light translucent play field so
+  // the page background shows through while pegs/slots stay readable.
+  const blend = !!(config.theme && config.theme.blend);
 
-  // ---- Recessed inner play field ----
+  if(!blend){
+    // ---- Cabinet outer frame (the solid walls of the box) ----
+    roundRect(ctx, 1,1, BOARD_W-2, BOARD_H-2, 26);
+    const frame = ctx.createLinearGradient(0,0,BOARD_W,BOARD_H);
+    frame.addColorStop(0,"#3b2350");
+    frame.addColorStop(.5,"#241636");
+    frame.addColorStop(1,"#3b2350");
+    ctx.fillStyle = frame; ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = (config.theme && config.theme.frameColor) || "#ff2e63"; ctx.stroke();   // cabinet trim (configurable)
+    // inner bevel highlight around the frame
+    roundRect(ctx, 4,4, BOARD_W-8, BOARD_H-8, 23);
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.stroke();
+  }
+
+  // ---- Inner play field ----
   roundRect(ctx, PLAY_L, TOP_FRAME, PLAY_W, BOARD_H - TOP_FRAME - 8, 14);
-  const g = ctx.createLinearGradient(0,TOP_FRAME,0,BOARD_H);
-  g.addColorStop(0,"#141726");
-  g.addColorStop(1,"#0b0d1a");
-  ctx.fillStyle = g; ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.stroke();  // recess shadow
+  if(blend){
+    ctx.fillStyle = "rgba(8,10,22,0.30)";   // subtle tint: blended but keeps pegs legible
+    ctx.fill();
+  }else{
+    const g = ctx.createLinearGradient(0,TOP_FRAME,0,BOARD_H);
+    g.addColorStop(0,"#141726");
+    g.addColorStop(1,"#0b0d1a");
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.stroke();  // recess shadow
+  }
   ctx.save();                       // clip everything else to the play field
   roundRect(ctx, PLAY_L, TOP_FRAME, PLAY_W, BOARD_H - TOP_FRAME - 8, 14);
   ctx.clip();
@@ -1085,6 +1101,8 @@ slotCountEl.addEventListener("change", ()=>{
 /* ---------- Theme controls ---------- */
 const bgColorEl   = document.getElementById("bgColor");
 const frameColorEl= document.getElementById("frameColor");
+const frameColorWrap = document.getElementById("frameColorWrap");
+const blendToggleEl  = document.getElementById("blendToggle");
 const bgColorWrap = document.getElementById("bgColorWrap");
 const bgImageWrap = document.getElementById("bgImageWrap");
 const bgImgLabel  = document.getElementById("bgImgLabel");
@@ -1102,6 +1120,8 @@ function syncThemeControls(){
   });
   bgColorEl.value = /^#/.test(config.theme.color) ? config.theme.color : "#0f1024";
   frameColorEl.value = /^#/.test(config.theme.frameColor || "") ? config.theme.frameColor : "#ff2e63";
+  blendToggleEl.checked = !!config.theme.blend;
+  frameColorWrap.style.display = config.theme.blend ? "none" : "";   // outline is hidden in blend mode
   bgColorWrap.style.display = config.theme.type === "color" ? "" : "none";
   bgImageWrap.style.display = config.theme.type === "image" ? "" : "none";
   bgImgLabel.classList.toggle("set", !!config.theme.image);
@@ -1120,6 +1140,11 @@ bgColorEl.addEventListener("input", ()=>{
 });
 frameColorEl.addEventListener("input", ()=>{
   config.theme.frameColor = frameColorEl.value;   // board outline; picked up on next draw frame
+  saveConfig();
+});
+blendToggleEl.addEventListener("change", ()=>{
+  config.theme.blend = blendToggleEl.checked;     // transparent board; picked up on next draw frame
+  frameColorWrap.style.display = config.theme.blend ? "none" : "";
   saveConfig();
 });
 document.getElementById("bgImage").addEventListener("change", e=>{
