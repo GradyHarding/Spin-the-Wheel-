@@ -356,6 +356,8 @@ const PEG_REST= 0.3;          // pegs are less bouncy, so the ball plops down in
 const VY_MAX  = 11;
 const VX_MAX  = 10;           // cap horizontal speed so it stays proportional to the fall
 const STORE_KEY = "plinkoConfig_v1";
+// Default slot colors (used as the initial color for each slot; each is editable).
+const SLOT_PALETTE = ["#ff2e63","#08d9d6","#ffd93d","#a06bff","#3ddc84","#ff8c42","#ff5ea8","#4d9bff","#f9c74f","#43aa8b","#f94144","#577590"];
 
 /* ---------- DOM ---------- */
 const canvas  = document.getElementById("board");
@@ -381,7 +383,7 @@ function defaultConfig(){
   const names = ["Sticker","Keychain","T-Shirt","Gift Card","Mug","Grand Prize"];
   const slots = [];
   for(let i=0;i<5;i++){
-    slots.push({ name:names[i]||("Prize "+(i+1)), inventory:5, slotImg:"", prizeImg:"" });
+    slots.push({ name:names[i]||("Prize "+(i+1)), inventory:5, color:SLOT_PALETTE[i % SLOT_PALETTE.length], slotImg:"", prizeImg:"" });
   }
   return {
     slots,
@@ -400,8 +402,9 @@ function loadConfig(){
         // Normalize older saved configs (pre-ball-customization / pre-inventory).
         c.theme = Object.assign({ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63" }, c.theme||{});
         c.ball  = Object.assign({ radius:15, color:"#ffd93d", image:"" }, c.ball||{});
-        c.slots.forEach(s=>{                       // ensure every slot has an inventory count
+        c.slots.forEach((s,i)=>{                    // ensure every slot has inventory + a color
           if(s.inventory == null) s.inventory = 5;
+          if(!s.color) s.color = SLOT_PALETTE[i % SLOT_PALETTE.length];
           delete s.percent;                        // old weighting field is no longer used
         });
         return c;
@@ -731,10 +734,9 @@ function drawSlots(){
     return;
   }
   const S = activeSlots.length;
-  const palette = ["#ff2e63","#08d9d6","#ffd93d","#a06bff","#3ddc84","#ff8c42","#ff5ea8","#4d9bff","#f9c74f","#43aa8b","#f94144","#577590"];
   for(let i=0;i<S;i++){
     const x = PLAY_L + i*slotWidth;
-    const col = palette[i % palette.length];
+    const col = (activeSlots[i] && activeSlots[i].color) || SLOT_PALETTE[i % SLOT_PALETTE.length];
 
     // bin body
     roundRect(ctx, x+3, slotTopY, slotWidth-6, SLOT_H-4, 10);
@@ -1014,6 +1016,8 @@ function renderSlotEditor(){
       <input type="text" data-i="${i}" data-k="name" value="${escapeHtml(slot.name)}" />
       <label style="margin-top:8px">Inventory (qty remaining)</label>
       <input type="number" min="0" step="1" data-i="${i}" data-k="inventory" value="${slot.inventory}" />
+      <label style="margin-top:8px">Slot color</label>
+      <input type="color" data-i="${i}" data-k="color" value="${/^#/.test(slot.color||'')?slot.color:'#ff2e63'}" />
       <label class="fileBtn ${slot.slotImg?'set':''}" style="margin-top:10px">
         ${slot.slotImg?'✓ Slot image set':'🖼️ Slot image'}
         <input type="file" accept="image/*" data-i="${i}" data-k="slotImg">
@@ -1026,8 +1030,8 @@ function renderSlotEditor(){
     slotListEl.appendChild(card);
   });
 
-  // text / number inputs
-  slotListEl.querySelectorAll('input[type=text],input[type=number]').forEach(inp=>{
+  // text / number / color inputs
+  slotListEl.querySelectorAll('input[type=text],input[type=number],input[type=color]').forEach(inp=>{
     inp.addEventListener("input", e=>{
       const i = +e.target.dataset.i, k = e.target.dataset.k;
       if(k === "inventory"){
@@ -1069,7 +1073,7 @@ slotCountEl.addEventListener("change", ()=>{
   const cur = config.slots;
   if(n > cur.length){
     for(let i=cur.length;i<n;i++)
-      cur.push({ name:"Prize "+(i+1), inventory:5, slotImg:"", prizeImg:"" });
+      cur.push({ name:"Prize "+(i+1), inventory:5, color:SLOT_PALETTE[i % SLOT_PALETTE.length], slotImg:"", prizeImg:"" });
   }else{
     cur.length = n;
   }
