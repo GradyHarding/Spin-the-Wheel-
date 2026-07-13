@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Spin the Wheel — Kiosk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.4.1/tailwind.min.js"></script>
+<style>
+  :root{
+    --bg-default:#121419;
+    --panel-bg:#282a2f;
+    --brand:#00a19a;
+    --brand-active:#00726e;
+    --info:#2196F3;
+    --danger:#F44336;
+  }
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--bg-default);
+    overflow:hidden;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  body{
+    font-family:'Source Sans 3',sans-serif;
+    color:#e8e8ea;
+  }
+  .font-head{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    line-height:1.1;
+  }
+  .font-ui{
+    font-family:'Source Sans 3',sans-serif;
+    line-height:1.15;
+  }
+  /* sharp corners everywhere, no rounded card look */
+  .panel, .kiosk-btn, input, select, .slice-row, .modal-box{
+    border-radius:0 !important;
+  }
+  .kiosk-btn{
+    background:var(--brand);
+    color:#08110f;
+    font-family:'Source Sans 3',sans-serif;
+    font-weight:700;
+    transition:background-color .08s ease, transform .05s ease;
+    border:2px solid #000;
+  }
+  .kiosk-btn:active{
+    background:var(--brand-active);
+    transform:scale(0.97);
+  }
+  .panel{
+    background:var(--panel-bg);
+    border:2px solid #000;
+  }
+  input[type="text"], input[type="number"], input[type="url"], select{
+    background:#1b1d22;
+    border:2px solid #3a3d44;
+    color:#e8e8ea;
+    padding:8px 10px;
+    font-family:'Source Sans 3',sans-serif;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, input[type="url"]:focus{
+    outline:2px solid var(--brand);
+    border-color:var(--brand);
+  }
+  input[type="color"]{
+    background:transparent;
+    border:2px solid #3a3d44;
+    height:38px;
+    width:48px;
+    padding:2px;
+  }
+
+  #settingsDrawer{
+    transition:transform .35s cubic-bezier(.4,0,.2,1);
+    transform:translateX(100%);
+  }
+  #settingsDrawer.open{
+    transform:translateX(0);
+  }
+  #drawerScrim{
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .3s ease;
+  }
+  #drawerScrim.open{
+    opacity:1;
+    pointer-events:auto;
+  }
+
+  #wheelWrap{
+    position:relative;
+    width:min(78vw, 640px);
+    height:min(78vw, 640px);
+  }
+  #wheelCanvas{
+    width:100%;
+    height:100%;
+    display:block;
+    filter:drop-shadow(0 10px 40px rgba(0,0,0,.6));
+  }
+  #spinHub{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    width:16%;
+    height:16%;
+    min-width:64px;
+    min-height:64px;
+    border-radius:50% !important;
+    background:var(--brand);
+    border:4px solid #08110f;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 6px 18px rgba(0,0,0,.5);
+    cursor:pointer;
+    z-index:5;
+  }
+  #spinHub:active{
+    background:var(--brand-active);
+  }
+  #spinHub span{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    color:#08110f;
+    font-size:clamp(14px,2.4vw,22px);
+    letter-spacing:1px;
+  }
+  #pointerArrow{
+    position:absolute;
+    top:-2%;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:6;
+    filter:drop-shadow(0 3px 6px rgba(0,0,0,.6));
+  }
+
+  #winnerModal{
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s ease;
+  }
+  #winnerModal.show{
+    opacity:1;
+    pointer-events:auto;
+  }
+  .warning-block{
+    background:var(--danger);
+    color:#fff;
+    font-weight:700;
+    border:2px solid #000;
+  }
+  .slice-row{
+    background:#1b1d22;
+    border:1px solid #3a3d44;
+  }
+  ::-webkit-scrollbar{width:10px;}
+  ::-webkit-scrollbar-track{background:#1b1d22;}
+  ::-webkit-scrollbar-thumb{background:#3a3d44;}
+</style>
+</head>
+<body class="w-full h-full relative">
+
+  <!-- Header -->
+  <header class="w-full flex items-center justify-between px-6 py-4 relative z-10">
+    <h1 id="headlineText" class="font-head text-[clamp(22px,4vw,44px)] text-white tracking-wide">Spin to win</h1>
+    <button id="openSettingsBtn" class="kiosk-btn px-4 py-2 flex items-center gap-2 text-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Manage
+    </button>
+  </header>
+
+  <!-- Wheel Area -->
+  <main class="w-full flex items-center justify-center" style="height:calc(100% - 88px);">
+    <div id="wheelWrap">
+      <svg id="pointerArrow" width="44" height="54" viewBox="0 0 44 54">
+        <polygon points="22,54 2,6 42,6" fill="#00a19a" stroke="#08110f" stroke-width="3"/>
+      </svg>
+      <canvas id="wheelCanvas" width="640" height="640"></canvas>
+      <div id="spinHub"><span>Spin</span></div>
+    </div>
+  </main>
+
+  <!-- Settings Drawer Scrim -->
+  <div id="drawerScrim" class="fixed inset-0 bg-black/70 z-20"></div>
+
+  <!-- Settings Drawer -->
+  <aside id="settingsDrawer" class="panel fixed top-0 right-0 h-full w-full sm:w-[440px] z-30 overflow-y-auto">
+    <div class="p-5 flex items-center justify-between" style="border-bottom:2px solid #000;">
+      <h2 class="font-head text-2xl text-white">Settings</h2>
+      <button id="closeSettingsBtn" class="kiosk-btn w-9 h-9 flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#08110f" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="p-5 space-y-6">
+
+      <!-- Headline editor -->
+      <section>
+        <label class="font-ui text-sm text-gray-300 block mb-2">Header text</label>
+        <input id="headlineInput" type="text" class="w-full" value="Spin to win">
+      </section>
+
+      <!-- Background config -->
+      <section>
+        <label class="font-ui text-sm text-gray-300 block mb-2">Background</label>
+        <div class="flex gap-2 mb-3">
+          <button id="bgTypeColorBtn" class="kiosk-btn flex-1 py-2 text-sm">Solid color</button>
+          <button id="bgTypeImageBtn" class="kiosk-btn flex-1 py-2 text-sm" style="background:#3a3d44;color:#e8e8ea;">Image URL</button>
+        </div>
+        <div id="bgColorRow" class="flex items-center gap-3">
+          <input id="bgColorInput" type="color" value="#121419">
+          <span class="font-ui text-sm text-gray-400">Pick a background color</span>
+        </div>
+        <div id="bgImageRow" class="hidden">
+          <input id="bgImageInput" type="url" class="w-full" placeholder="https://example.com/background.jpg">
+        </div>
+      </section>
+
+      <!-- Probability validation -->
+      <div id="probWarning" class="warning-block px-3 py-2 text-sm hidden">
+        Probabilities total <span id="probTotalDisplay">0</span>%. They must sum to exactly 100% before the wheel can spin.
+      </div>
+
+      <!-- Slice CRUD -->
+      <section>
+        <div class="flex items-center justify-between mb-2">
+          <label class="font-ui text-sm text-gray-300">Prize segments</label>
+          <button id="addSliceBtn" class="kiosk-btn px-3 py-1.5 text-sm">+ Add segment</button>
+        </div>
+        <div id="sliceList" class="space-y-3"></div>
+      </section>
+
+    </div>
+  </aside>
+
+  <!-- Winner Modal -->
+  <div id="winnerModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/85">
+    <div class="modal-box panel p-10 text-center max-w-lg w-[90%]">
+      <p class="font-ui text-sm tracking-widest text-gray-400 uppercase mb-3">Winner</p>
+      <img id="winnerImg" src="" alt="" class="mx-auto mb-4 max-h-40 hidden">
+      <h2 id="winnerLabel" class="font-head text-4xl sm:text-5xl text-white mb-6">PRIZE</h2>
+      <button id="closeWinnerBtn" class="kiosk-btn px-8 py-3 text-lg">Reset &amp; close</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- State ----------
+  let slices = [
+    { id: cryptoRandomId(), label: "Free Coffee",   imageUrl: "", color: "#00a19a", probability: 30, stock: 20 },
+    { id: cryptoRandomId(), label: "10% Off",       imageUrl: "", color: "#2196F3", probability: 25, stock: 15 },
+    { id: cryptoRandomId(), label: "Free Dessert",  imageUrl: "", color: "#F44336", probability: 15, stock: 5  },
+    { id: cryptoRandomId(), label: "Try Again",     imageUrl: "", color: "#282a2f", probability: 20, stock: 999 },
+    { id: cryptoRandomId(), label: "Grand Prize",   imageUrl: "", color: "#00726e", probability: 10, stock: 1  },
+  ];
+
+  let totalRotation = 0;
+  let isSpinning = false;
+
+  function cryptoRandomId(){
+    return 'id-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  // ---------- Elements ----------
+  const wheelCanvas   = document.getElementById('wheelCanvas');
+  const ctx           = wheelCanvas.getContext('2d');
+  const spinHub        = document.getElementById('spinHub');
+  const openSettingsBtn = document.getElementById('openSettingsBtn');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const settingsDrawer = document.getElementById('settingsDrawer');
+  const drawerScrim    = document.getElementById('drawerScrim');
+  const headlineInput  = document.getElementById('headlineInput');
+  const headlineText   = document.getElementById('headlineText');
+  const bgColorInput   = document.getElementById('bgColorInput');
+  const bgImageInput   = document.getElementById('bgImageInput');
+  const bgTypeColorBtn = document.getElementById('bgTypeColorBtn');
+  const bgTypeImageBtn = document.getElementById('bgTypeImageBtn');
+  const bgColorRow     = document.getElementById('bgColorRow');
+  const bgImageRow     = document.getElementById('bgImageRow');
+  const sliceList      = document.getElementById('sliceList');
+  const addSliceBtn    = document.getElementById('addSliceBtn');
+  const probWarning    = document.getElementById('probWarning');
+  const probTotalDisplay = document.getElementById('probTotalDisplay');
+  const winnerModal    = document.getElementById('winnerModal');
+  const winnerLabel    = document.getElementById('winnerLabel');
+  const winnerImg      = document.getElementById('winnerImg');
+  const closeWinnerBtn = document.getElementById('closeWinnerBtn');
+  const wheelWrap       = document.getElementById('wheelWrap');
+
+  // ---------- Drawer open/close ----------
+  function openDrawer(){
+    settingsDrawer.classList.add('open');
+    drawerScrim.classList.add('open');
+    renderSliceEditor();
+  }
+  function closeDrawer(){
+    settingsDrawer.classList.remove('open');
+    drawerScrim.classList.remove('open');
+  }
+  openSettingsBtn.addEventListener('click', openDrawer);
+  closeSettingsBtn.addEventListener('click', closeDrawer);
+  drawerScrim.addEventListener('click', closeDrawer);
+
+  // ---------- Headline ----------
+  headlineInput.addEventListener('input', () => {
+    headlineText.textContent = headlineInput.value || "Spin to win";
+  });
+
+  // ---------- Background ----------
+  function applySolidBackground(color){
+    document.body.style.backgroundImage = "none";
+    document.body.style.backgroundColor = color;
+  }
+  function applyImageBackground(url){
+    if(!url) return;
+    document.body.style.backgroundImage = `url("${url}")`;
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center";
+  }
+  bgColorInput.addEventListener('input', () => applySolidBackground(bgColorInput.value));
+  bgImageInput.addEventListener('input', () => applyImageBackground(bgImageInput.value));
+  bgTypeColorBtn.addEventListener('click', () => {
+    bgColorRow.classList.remove('hidden');
+    bgImageRow.classList.add('hidden');
+    bgTypeColorBtn.style.background = "var(--brand)";
+    bgTypeColorBtn.style.color = "#08110f";
+    bgTypeImageBtn.style.background = "#3a3d44";
+    bgTypeImageBtn.style.color = "#e8e8ea";
+    applySolidBackground(bgColorInput.value);
+  });
+  bgTypeImageBtn.addEventListener('click', () => {
+    bgImageRow.classList.remove('hidden');
+    bgColorRow.classList.add('hidden');
+    bgTypeImageBtn.style.background = "var(--brand)";
+    bgTypeImageBtn.style.color = "#08110f";
+    bgTypeColorBtn.style.background = "#3a3d44";
+    bgTypeColorBtn.style.color = "#e8e8ea";
+    if(bgImageInput.value) applyImageBackground(bgImageInput.value);
+  });
+
+  // ---------- Slice CRUD / Editor ----------
+  function renderSliceEditor(){
+    sliceList.innerHTML = "";
+    slices.forEach((s) => {
+      const row = document.createElement('div');
+      row.className = "slice-row p-3 space-y-2";
+      row.innerHTML = `
+        <div class="flex gap-2">
+          <input type="text" class="flex-1 field-label" placeholder="Label name" value="${escapeAttr(s.label)}">
+          <input type="color" class="field-color" value="${s.color}">
+        </div>
+        <input type="url" class="w-full field-image" placeholder="Image URL (optional)" value="${escapeAttr(s.imageUrl)}">
+        <div class="flex gap-2 items-center">
+          <div class="flex-1">
+            <label class="font-ui text-xs text-gray-400 block mb-1">Win probability %</label>
+            <input type="number" min="0" max="100" step="0.1" class="w-full field-prob" value="${s.probability}">
+          </div>
+          <div class="flex-1">
+            <label class="font-ui text-xs text-gray-400 block mb-1">Stock quantity</label>
+            <input type="number" min="0" step="1" class="w-full field-stock" value="${s.stock}">
+          </div>
+          <button class="kiosk-btn field-delete self-end px-3 py-2" style="background:var(--danger);color:#fff;">Delete</button>
+        </div>
+      `;
+      row.querySelector('.field-label').addEventListener('input', (e) => { s.label = e.target.value; drawWheel(); });
+      row.querySelector('.field-color').addEventListener('input', (e) => { s.color = e.target.value; drawWheel(); });
+      row.querySelector('.field-image').addEventListener('input', (e) => { s.imageUrl = e.target.value; });
+      row.querySelector('.field-prob').addEventListener('input', (e) => {
+        s.probability = parseFloat(e.target.value) || 0;
+        validateProbabilities();
+        drawWheel();
+      });
+      row.querySelector('.field-stock').addEventListener('input', (e) => {
+        s.stock = Math.max(0, parseInt(e.target.value) || 0);
+        drawWheel();
+      });
+      row.querySelector('.field-delete').addEventListener('click', () => {
+        slices = slices.filter(x => x.id !== s.id);
+        renderSliceEditor();
+        validateProbabilities();
+        drawWheel();
+      });
+      sliceList.appendChild(row);
+    });
+  }
+
+  function escapeAttr(str){
+    return String(str || "").replace(/"/g, '&quot;');
+  }
+
+  addSliceBtn.addEventListener('click', () => {
+    slices.push({
+      id: cryptoRandomId(),
+      label: "New prize",
+      imageUrl: "",
+      color: "#00a19a",
+      probability: 0,
+      stock: 10
+    });
+    renderSliceEditor();
+    validateProbabilities();
+    drawWheel();
+  });
+
+  function validateProbabilities(){
+    const total = slices.reduce((sum, s) => sum + (parseFloat(s.probability) || 0), 0);
+    const rounded = Math.round(total * 10) / 10;
+    if (Math.abs(rounded - 100) > 0.05) {
+      probWarning.classList.remove('hidden');
+      probTotalDisplay.textContent = rounded;
+      return false;
+    }
+    probWarning.classList.add('hidden');
+    return true;
+  }
+
+  // ---------- Wheel math ----------
+  function getActiveSlices(){
+    // Only in-stock items are mathematically reachable
+    const active = slices.filter(s => s.stock > 0 && s.probability > 0);
+    const sum = active.reduce((t, s) => t + s.probability, 0);
+    if (sum <= 0) return [];
+    // Redistribute proportionally so the active pool always totals exactly 100%
+    return active.map(s => ({ ...s, effectiveProb: (s.probability / sum) * 100 }));
+  }
+
+  // ---------- Drawing ----------
+  function drawWheel(){
+    const w = wheelCanvas.width, h = wheelCanvas.height;
+    const cx = w / 2, cy = h / 2, r = w / 2 - 8;
+    ctx.clearRect(0, 0, w, h);
+
+    const active = getActiveSlices();
+
+    if (active.length === 0){
+      ctx.fillStyle = "#282a2f";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#e8e8ea";
+      ctx.font = "700 22px 'Source Sans 3'";
+      ctx.textAlign = "center";
+      ctx.fillText("No stock available", cx, cy);
+      return;
+    }
+
+    let startAngle = -Math.PI / 2; // top
+    active.forEach((s) => {
+      const sliceAngle = (s.effectiveProb / 100) * Math.PI * 2;
+      const endAngle = startAngle + sliceAngle;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fillStyle = s.color;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#08110f";
+      ctx.stroke();
+
+      // Label
+      const midAngle = startAngle + sliceAngle / 2;
+      ctx.save();
+      ctx.translate(cx + Math.cos(midAngle) * r * 0.62, cy + Math.sin(midAngle) * r * 0.62);
+      ctx.rotate(midAngle + Math.PI / 2);
+      ctx.fillStyle = "#0a0a0a";
+      ctx.font = "700 18px 'Oswald'";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      wrapCanvasText(ctx, s.label.toUpperCase(), 0, 0, r * 0.55, 20);
+      ctx.restore();
+
+      startAngle = endAngle;
+    });
+
+    // hub ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.16, 0, Math.PI * 2);
+    ctx.fillStyle = "#08110f";
+    ctx.fill();
+  }
+
+  function wrapCanvasText(context, text, x, y, maxWidth, lineHeight){
+    const words = text.split(' ');
+    let line = '';
+    const lines = [];
+    for (let n = 0; n < words.length; n++){
+      const testLine = line + words[n] + ' ';
+      if (context.measureText(testLine).width > maxWidth && n > 0){
+        lines.push(line.trim());
+        line = words[n] + ' ';
+      } else {
+        line = testLine;
+      }
+    }
+    lines.push(line.trim());
+    const offset = -((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((l, i) => context.fillText(l, x, y + offset + i * lineHeight));
+  }
+
+  // ---------- Spin logic ----------
+  function spin(){
+    if (isSpinning) return;
+    if (!validateProbabilities()) {
+      openDrawer();
+      return;
+    }
+    const active = getActiveSlices();
+    if (active.length === 0) return;
+
+    isSpinning = true;
+
+    // Weighted pick — computed the instant the spin fires
+    const roll = Math.random() * 100;
+    let cumulative = 0;
+    let winner = active[active.length - 1];
+    let winnerStartDeg = 0, winnerEndDeg = 360;
+    let acc = 0;
+    for (const s of active){
+      const startDeg = acc;
+      const endDeg = acc + (s.effectiveProb / 100) * 360;
+      cumulative += s.effectiveProb;
+      if (roll <= cumulative){
+        winner = s;
+        winnerStartDeg = startDeg;
+        winnerEndDeg = endDeg;
+        break;
+      }
+      acc = endDeg;
+    }
+
+    // Target angle: a safe point inside the slice, away from the edges
+    const margin = Math.min(6, (winnerEndDeg - winnerStartDeg) * 0.15);
+    const targetDeg = winnerStartDeg + margin + Math.random() * ((winnerEndDeg - winnerStartDeg) - margin * 2);
+
+    const currentMod = ((totalRotation % 360) + 360) % 360;
+    const neededForward = ((360 - targetDeg) - currentMod + 360) % 360;
+    const extraSpins = 6 + Math.floor(Math.random() * 3); // 6-8 full spins for drama
+    totalRotation += extraSpins * 360 + neededForward;
+
+    wheelWrap.style.transition = "transform 4.2s cubic-bezier(0.14,0.72,0.13,1)";
+    wheelWrap.style.transform = `rotate(${totalRotation}deg)`;
+
+    const onDone = () => {
+      wheelWrap.removeEventListener('transitionend', onDone);
+      landOnPrize(winner);
+    };
+    wheelWrap.addEventListener('transitionend', onDone);
+  }
+
+  function landOnPrize(winner){
+    // Decrement stock at the moment the wheel lands
+    const target = slices.find(s => s.id === winner.id);
+    if (target && target.stock > 0){
+      target.stock -= 1;
+    }
+    drawWheel();
+    renderSliceEditor();
+    isSpinning = false;
+    showWinnerModal(winner);
+  }
+
+  function showWinnerModal(winner){
+    winnerLabel.textContent = winner.label;
+    if (winner.imageUrl){
+      winnerImg.src = winner.imageUrl;
+      winnerImg.classList.remove('hidden');
+    } else {
+      winnerImg.classList.add('hidden');
+    }
+    winnerModal.classList.add('show');
+  }
+  closeWinnerBtn.addEventListener('click', () => {
+    winnerModal.classList.remove('show');
+  });
+
+  // ---------- Spin trigger (lag-free touch) ----------
+  let touchFired = false;
+  spinHub.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    touchFired = true;
+    spin();
+  }, { passive: false });
+  spinHub.addEventListener('click', () => {
+    if (touchFired){ touchFired = false; return; }
+    spin();
+  });
+
+  // ---------- Kiosk lockdown ----------
+  document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', (e) => { e.preventDefault(); });
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, false);
+
+  // ---------- Init ----------
+  applySolidBackground(bgColorInput.value);
+  validateProbabilities();
+  renderSliceEditor();
+  drawWheel();
+
+})();
+</script>
+</body>
+</html>
