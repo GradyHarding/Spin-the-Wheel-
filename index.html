@@ -293,15 +293,14 @@ body.game-active.controls-hidden #exit-bar {
 .exit-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-pill);   /* equal width/height = circle */
   background: var(--color-danger);
   color: var(--text-on-brand);
-  font-family: var(--font-family-base);
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-base);
   cursor: pointer;
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(6px);
@@ -314,7 +313,8 @@ body.game-active.controls-hidden #exit-bar {
   background: #d43a49;
 }
 
-.exit-btn__icon { font-size: var(--font-size-lg); line-height: 1; }
+.exit-btn__icon { display: flex; }
+.exit-btn__icon svg { width: 30px; height: 30px; display: block; }
 
 /* Small loading shimmer shown while an iframe boots */
 #loader {
@@ -366,8 +366,13 @@ body.game-loading #loader { display: flex; }
   <div id="loader"><div class="spinner"></div>Loading game…</div>
 
   <div id="exit-bar">
-    <button class="exit-btn" id="exit-btn" type="button">
-      <span class="exit-btn__icon">←</span> Return to Hub
+    <button class="exit-btn" id="exit-btn" type="button" aria-label="Return to hub" title="Return to hub">
+      <span class="exit-btn__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+          <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+      </span>
     </button>
   </div>
 
@@ -470,13 +475,9 @@ body.game-loading #loader { display: flex; }
     const HIDE_AFTER_MS = 4000;
 
     function scheduleControlsHide() {
+      // Exit control stays on screen for the whole game session (no auto-hide).
       clearTimeout(hideTimer);
       body.classList.remove("controls-hidden");
-      hideTimer = setTimeout(function () {
-        if (body.classList.contains("game-active")) {
-          body.classList.add("controls-hidden");
-        }
-      }, HIDE_AFTER_MS);
     }
 
     // Any tap while a game is active re-shows the exit bar and restarts the timer
