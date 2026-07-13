@@ -553,6 +553,33 @@ input[type="color"].hub-color {
   function escapeHtml(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function escapeAttr(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
 
+  /* Downscale + compress an uploaded image so it fits in localStorage.
+     maxEdge caps the longest side; picks the smaller of PNG (transparency-safe)
+     / JPEG. Falls back to the raw data URL if decoding fails. cb(dataURL). */
+  function processImage(file, maxEdge, cb) {
+    const fr = new FileReader();
+    fr.onload = function () {
+      const img = new Image();
+      img.onload = function () {
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxEdge) { const s = maxEdge / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        let png = null, jpg = null;
+        try { png = c.toDataURL("image/png"); } catch (e) {}
+        try { jpg = c.toDataURL("image/jpeg", 0.85); } catch (e) {}
+        let out = fr.result;
+        if (png && (png.length <= 200000 || !jpg)) out = png;
+        else if (jpg) out = jpg;
+        else if (png) out = png;
+        cb(out);
+      };
+      img.onerror = function () { cb(fr.result); };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  }
+
   /* ==========================================================================
      HUB CONTROLLER
      ========================================================================= */
@@ -677,8 +704,7 @@ input[type="color"].hub-color {
     document.getElementById("cfg-bgimage").addEventListener("input", function (e) { hubCfg.bgImage = e.target.value.trim(); applyHub(); syncBgPreview(); hubSave(); });
     document.getElementById("cfg-bgimage-file").addEventListener("change", function (e) {
       const f = e.target.files && e.target.files[0]; if (!f) return;
-      const r = new FileReader(); r.onload = function () { hubCfg.bgImage = r.result; document.getElementById("cfg-bgimage").value = ""; applyHub(); syncBgPreview(); hubSave(); };
-      r.readAsDataURL(f);
+      processImage(f, 1400, function (dataUrl) { hubCfg.bgImage = dataUrl; document.getElementById("cfg-bgimage").value = ""; applyHub(); syncBgPreview(); hubSave(); });
     });
     document.getElementById("cfg-bgimage-clear").addEventListener("click", function () {
       hubCfg.bgImage = ""; document.getElementById("cfg-bgimage").value = ""; document.getElementById("cfg-bgimage-file").value = "";
@@ -723,8 +749,7 @@ input[type="color"].hub-color {
       const t = e.target;
       if (t.dataset.upload && t.files && t.files[0]) {
         const host = t.closest("[data-gid]"); const o = ensureGame(host.dataset.gid);
-        const r = new FileReader(); r.onload = function () { o.image = r.result; renderGameEditors(); renderGrid(); hubSave(); };
-        r.readAsDataURL(t.files[0]);
+        processImage(t.files[0], 512, function (dataUrl) { o.image = dataUrl; renderGameEditors(); renderGrid(); hubSave(); });
       }
     });
     gamesWrap.addEventListener("click", function (e) {
