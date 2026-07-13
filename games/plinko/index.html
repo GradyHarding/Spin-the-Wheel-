@@ -973,10 +973,33 @@ const pctWarnEl  = document.getElementById("pctWarn");
 document.getElementById("gear").onclick      = ()=> admin.classList.toggle("open");
 document.getElementById("adminClose").onclick= ()=> admin.classList.remove("open");
 
-/* Read a File input as a data URL. */
+/* Read a File input, downscaling + compressing it so it fits in localStorage.
+   A slot image doesn't need full resolution; we cap the longest edge and pick
+   the smaller of PNG (keeps transparency) / JPEG. Falls back to the raw file
+   if the browser can't decode it. Callback signature is unchanged: cb(dataURL). */
 function readFileAsDataURL(file, cb){
+  const MAX_EDGE = 512;
   const fr = new FileReader();
-  fr.onload = ()=> cb(fr.result);
+  fr.onload = ()=>{
+    const img = new Image();
+    img.onload = ()=>{
+      let w = img.width, h = img.height;
+      if (Math.max(w, h) > MAX_EDGE){ const s = MAX_EDGE / Math.max(w, h); w = Math.round(w*s); h = Math.round(h*s); }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      let png = null, jpg = null;
+      try { png = c.toDataURL("image/png"); } catch(e){}
+      try { jpg = c.toDataURL("image/jpeg", 0.85); } catch(e){}
+      // Prefer PNG when it's already small (transparency-safe), else JPEG.
+      let out = fr.result;
+      if (png && (png.length <= 200000 || !jpg)) out = png;
+      else if (jpg) out = jpg;
+      else if (png) out = png;
+      cb(out);
+    };
+    img.onerror = ()=> cb(fr.result);
+    img.src = fr.result;
+  };
   fr.readAsDataURL(file);
 }
 

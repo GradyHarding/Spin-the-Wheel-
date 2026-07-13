@@ -371,6 +371,33 @@ function saveConfig() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
 }
 
+/* Downscale + compress an uploaded image so it fits in localStorage.
+   maxEdge caps the longest side; picks the smaller of PNG (transparency-safe)
+   / JPEG. Falls back to the raw data URL if decoding fails. cb(dataURL). */
+function processImage(file, maxEdge, cb) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (Math.max(w, h) > maxEdge) { const s = maxEdge / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      let png = null, jpg = null;
+      try { png = c.toDataURL('image/png'); } catch (e) {}
+      try { jpg = c.toDataURL('image/jpeg', 0.85); } catch (e) {}
+      let out = fr.result;
+      if (png && (png.length <= 200000 || !jpg)) out = png;
+      else if (jpg) out = jpg;
+      else if (png) out = png;
+      cb(out);
+    };
+    img.onerror = () => cb(fr.result);
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+
 /* ---------------------------- Probability engine ---------------------------- */
 // Active = in stock (stock > 0). Effective prob = raw prob normalized across active pool.
 function getActiveSegments() {
@@ -1072,13 +1099,11 @@ document.getElementById('cfgBgImage').addEventListener('input', (e) => {
 document.getElementById('cfgBgImageUpload').addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    config.bgImage = reader.result;            // base64 data URI
+  processImage(file, 1400, (dataUrl) => {
+    config.bgImage = dataUrl;                   // downscaled base64 data URI
     document.getElementById('cfgBgImage').value = '';
     applyGlobals(); syncBgImagePreview(); saveConfig();
-  };
-  reader.readAsDataURL(file);
+  });
 });
 document.getElementById('cfgBgImageClear').addEventListener('click', () => {
   config.bgImage = '';
@@ -1094,13 +1119,11 @@ document.getElementById('cfgLogoImg').addEventListener('input', (e) => {
 document.getElementById('cfgLogoImgUpload').addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    config.logoImg = reader.result;            // base64 data URI
+  processImage(file, 800, (dataUrl) => {
+    config.logoImg = dataUrl;                   // downscaled base64 data URI
     document.getElementById('cfgLogoImg').value = '';
     applyGlobals(); syncLogoImgPreview(); saveConfig();
-  };
-  reader.readAsDataURL(file);
+  });
 });
 document.getElementById('cfgLogoImgClear').addEventListener('click', () => {
   config.logoImg = '';
@@ -1120,13 +1143,11 @@ document.getElementById('cfgSpinImg').addEventListener('input', (e) => {
 document.getElementById('cfgSpinImgUpload').addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    config.spinImg = reader.result;           // base64 data URI
+  processImage(file, 512, (dataUrl) => {
+    config.spinImg = dataUrl;                  // downscaled base64 data URI
     document.getElementById('cfgSpinImg').value = '';
     applySpinButton(); syncSpinImgPreview(); saveConfig();
-  };
-  reader.readAsDataURL(file);
+  });
 });
 document.getElementById('cfgSpinImgClear').addEventListener('click', () => {
   config.spinImg = '';
@@ -1188,12 +1209,12 @@ document.getElementById('segmentList').addEventListener('change', (e) => {
   if (t.dataset.upload && t.files && t.files[0]) {
     const seg = findSeg(t.dataset.id);
     if (!seg) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      seg[t.dataset.upload] = reader.result;  // base64 data URI
+    // Slice icons stay small; the winner pop-up image can be larger (fullscreen).
+    const maxEdge = t.dataset.upload === 'winImg' ? 1400 : 512;
+    processImage(t.files[0], maxEdge, (dataUrl) => {
+      seg[t.dataset.upload] = dataUrl;         // downscaled base64 data URI
       renderSegmentList(); drawWheel(); saveConfig();
-    };
-    reader.readAsDataURL(t.files[0]);
+    });
   }
 });
 
