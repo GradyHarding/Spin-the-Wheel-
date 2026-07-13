@@ -182,7 +182,8 @@
   }
   #modal.show{ display:flex; }
   #prizeImg{
-    max-width:100vw; max-height:100vh; object-fit:contain; display:none;
+    width:100vw; height:100vh; height:100dvh;   /* fill the screen, scaling up small images too */
+    object-fit:contain; display:none;
     animation:popIn .5s cubic-bezier(.18,.9,.32,1.4);
   }
   #prizeFallback{ text-align:center; padding:0 24px; display:none; animation:popIn .5s cubic-bezier(.18,.9,.32,1.4); }
@@ -993,8 +994,8 @@ document.getElementById("adminClose").onclick= ()=> admin.classList.remove("open
    A slot image doesn't need full resolution; we cap the longest edge and pick
    the smaller of PNG (keeps transparency) / JPEG. Falls back to the raw file
    if the browser can't decode it. Callback signature is unchanged: cb(dataURL). */
-function readFileAsDataURL(file, cb){
-  const MAX_EDGE = 512;
+function readFileAsDataURL(file, cb, maxEdge){
+  const MAX_EDGE = maxEdge || 512;   // callers pass a larger cap for full-screen images
   const fr = new FileReader();
   fr.onload = ()=>{
     const img = new Image();
@@ -1066,11 +1067,12 @@ function renderSlotEditor(){
     inp.addEventListener("change", e=>{
       const f = e.target.files[0]; if(!f) return;
       const i = +e.target.dataset.i, k = e.target.dataset.k;
+      // Grand-prize image is shown full-screen, so keep it high-res; slot thumbnails stay small.
       readFileAsDataURL(f, url=>{
         config.slots[i][k] = url;
         saveConfig();
         renderSlotEditor();          // refresh "set" state on the button
-      });
+      }, k === "prizeImg" ? 1400 : 512);
     });
   });
   updateInvSummary();
@@ -1152,7 +1154,7 @@ document.getElementById("bgImage").addEventListener("change", e=>{
   readFileAsDataURL(f, url=>{
     config.theme.image = url; config.theme.type = "image";
     syncThemeControls(); applyTheme(); saveConfig();
-  });
+  }, 1400);   // full-screen background: keep it high-res
 });
 
 /* ---------- Ball controls ---------- */
