@@ -49,11 +49,11 @@
     border-radius:22px;
   }
 
-  /* Full-screen confetti overlay */
+  /* Full-screen confetti overlay (above the win overlay so it rains over it) */
   #confetti{
     position:fixed; inset:0;
     pointer-events:none;
-    z-index:40;
+    z-index:75;
   }
 
   /* Canvas shows a pointer cursor while a drop is allowed (tap-to-drop). */
@@ -172,24 +172,20 @@
   /* ============================================================
      WIN MODAL
      ============================================================ */
+  /* Win overlay: just the prize image, tap anywhere to dismiss (matches the wheel). */
   #modal{
     position:fixed; inset:0; z-index:70;
     display:none; align-items:center; justify-content:center;
-    background:radial-gradient(circle at center, rgba(10,8,30,.75), rgba(0,0,0,.9));
+    background:rgba(0,0,0,.85);
     backdrop-filter:blur(4px);
+    cursor:pointer;
   }
   #modal.show{ display:flex; }
-  .prizeCard{
-    position:relative;
-    width:min(90vw,440px);
-    background:linear-gradient(160deg,#20243b,#12142b);
-    border:2px solid var(--gold);
-    border-radius:24px;
-    padding:28px 26px 26px;
-    text-align:center;
-    box-shadow:0 0 60px rgba(255,217,61,.35),0 30px 60px rgba(0,0,0,.6);
+  #prizeImg{
+    max-width:100vw; max-height:100vh; object-fit:contain; display:none;
     animation:popIn .5s cubic-bezier(.18,.9,.32,1.4);
   }
+  #prizeFallback{ text-align:center; padding:0 24px; display:none; animation:popIn .5s cubic-bezier(.18,.9,.32,1.4); }
   @keyframes popIn{ from{ transform:scale(.6); opacity:0; } to{ transform:scale(1); opacity:1; } }
   .winKicker{
     font-size:15px; letter-spacing:3px; text-transform:uppercase;
@@ -292,6 +288,8 @@
             <input type="file" id="bgImage" accept="image/*">
           </label>
         </div>
+        <label style="margin-top:12px">Box outline color</label>
+        <input type="color" id="frameColor" />
       </div>
 
       <!-- MUSIC -->
@@ -314,13 +312,12 @@
     </div>
   </aside>
 
-  <!-- ============ WIN MODAL ============ -->
-  <div id="modal">
-    <div class="prizeCard">
+  <!-- ============ WIN OVERLAY (image only, tap anywhere to dismiss) ============ -->
+  <div id="modal" title="Tap to continue">
+    <img id="prizeImg" alt="Prize" />
+    <div id="prizeFallback">
       <div class="winKicker">🎉 Winner! 🎉</div>
       <div class="prizeName" id="prizeName">YOU WON!</div>
-      <div class="prizeImgBox" id="prizeImgBox"></div>
-      <button id="playAgain">Play Again</button>
     </div>
   </div>
 
@@ -388,7 +385,7 @@ function defaultConfig(){
   }
   return {
     slots,
-    theme:{ type:"color", color:"#0f1024", image:"" },
+    theme:{ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63" },
     ball:{ radius:15, color:"#ffd93d", image:"" },
     volume:0.6
   };
@@ -401,7 +398,7 @@ function loadConfig(){
       const c = JSON.parse(raw);
       if(c && Array.isArray(c.slots) && c.slots.length>=2){
         // Normalize older saved configs (pre-ball-customization / pre-inventory).
-        c.theme = Object.assign({ type:"color", color:"#0f1024", image:"" }, c.theme||{});
+        c.theme = Object.assign({ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63" }, c.theme||{});
         c.ball  = Object.assign({ radius:15, color:"#ffd93d", image:"" }, c.ball||{});
         c.slots.forEach(s=>{                       // ensure every slot has an inventory count
           if(s.inventory == null) s.inventory = 5;
@@ -605,7 +602,7 @@ function drawBoard(){
   frame.addColorStop(1,"#3b2350");
   ctx.fillStyle = frame; ctx.fill();
   ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(255,46,99,.65)"; ctx.stroke();   // neon cabinet trim
+  ctx.strokeStyle = (config.theme && config.theme.frameColor) || "#ff2e63"; ctx.stroke();   // cabinet trim (configurable)
   // inner bevel highlight around the frame
   roundRect(ctx, 4,4, BOARD_W-8, BOARD_H-8, 23);
   ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.stroke();
@@ -921,7 +918,8 @@ function drawConfetti(){
    ================================================================= */
 const modal      = document.getElementById("modal");
 const prizeName  = document.getElementById("prizeName");
-const prizeImgBox= document.getElementById("prizeImgBox");
+const prizeImgEl  = document.getElementById("prizeImg");
+const prizeFallback = document.getElementById("prizeFallback");
 let modalTimer   = 0;
 
 function win(idx){
@@ -932,23 +930,23 @@ function win(idx){
   saveConfig();
   renderSlotEditor();                    // reflect the new count in the admin panel
   winChime();
-  burstConfetti();
 
-  prizeName.textContent = "YOU WON " + ((slot.name||"a prize").toUpperCase()) + "!";
-  prizeImgBox.innerHTML = "";
+  // Show ONLY the prize image (matches the wheel). Fall back to the name text
+  // when the slot has no image configured.
   const src = slot.prizeImg || slot.slotImg;
   if(src){
-    const img = new Image();
-    img.src = src;
-    prizeImgBox.appendChild(img);
+    prizeImgEl.src = src;
+    prizeImgEl.style.display = "block";
+    prizeFallback.style.display = "none";
   }else{
-    const e = document.createElement("div");
-    e.className = "emoji";
-    e.textContent = "🎁";
-    prizeImgBox.appendChild(e);
+    prizeName.textContent = "YOU WON " + ((slot.name||"a prize").toUpperCase()) + "!";
+    prizeFallback.style.display = "block";
+    prizeImgEl.style.display = "none";
+    prizeImgEl.removeAttribute("src");
   }
+
   clearTimeout(modalTimer);
-  modalTimer = setTimeout(()=> modal.classList.add("show"), 350);
+  modalTimer = setTimeout(()=>{ modal.classList.add("show"); burstConfetti(); }, 350);
 }
 
 function playAgain(){
@@ -1082,6 +1080,7 @@ slotCountEl.addEventListener("change", ()=>{
 
 /* ---------- Theme controls ---------- */
 const bgColorEl   = document.getElementById("bgColor");
+const frameColorEl= document.getElementById("frameColor");
 const bgColorWrap = document.getElementById("bgColorWrap");
 const bgImageWrap = document.getElementById("bgImageWrap");
 const bgImgLabel  = document.getElementById("bgImgLabel");
@@ -1098,6 +1097,7 @@ function syncThemeControls(){
     r.checked = (r.value === config.theme.type);
   });
   bgColorEl.value = /^#/.test(config.theme.color) ? config.theme.color : "#0f1024";
+  frameColorEl.value = /^#/.test(config.theme.frameColor || "") ? config.theme.frameColor : "#ff2e63";
   bgColorWrap.style.display = config.theme.type === "color" ? "" : "none";
   bgImageWrap.style.display = config.theme.type === "image" ? "" : "none";
   bgImgLabel.classList.toggle("set", !!config.theme.image);
@@ -1113,6 +1113,10 @@ document.querySelectorAll('input[name=bgType]').forEach(r=>{
 bgColorEl.addEventListener("input", ()=>{
   config.theme.color = bgColorEl.value;
   applyTheme(); saveConfig();
+});
+frameColorEl.addEventListener("input", ()=>{
+  config.theme.frameColor = frameColorEl.value;   // board outline; picked up on next draw frame
+  saveConfig();
 });
 document.getElementById("bgImage").addEventListener("change", e=>{
   const f = e.target.files[0]; if(!f) return;
@@ -1240,7 +1244,8 @@ function init(){
   syncBallControls();
   musicVol.value = config.volume;
 
-  document.getElementById("playAgain").addEventListener("click", playAgain);
+  // Tap anywhere on the win overlay to dismiss and ready the board again.
+  modal.addEventListener("click", playAgain);
   window.addEventListener("resize", sizeConfetti);
 
   // ---- Tap / click to drop ----
