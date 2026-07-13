@@ -1,0 +1,1248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Plinko Arcade</title>
+<style>
+  /* ============================================================
+     THEME + LAYOUT
+     ============================================================ */
+  :root{
+    --neon:#ff2e63;
+    --neon2:#08d9d6;
+    --gold:#ffd93d;
+    --panel:#171a2b;
+    --panel-2:#20243b;
+    --ink:#eef1ff;
+    --muted:#9aa0c3;
+    --ok:#2ecc71;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+    color:var(--ink);
+    background:#0f1024;                 /* replaced at runtime by theme */
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    user-select:none;
+  }
+
+  /* Stage holds the board and the drop button, keeps board aspect ratio */
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:12px;
+  }
+  #boardWrap{
+    position:relative;
+    height:94vh;
+    max-height:94vh;
+    aspect-ratio:720/820;
+    max-width:96vw;
+    filter:drop-shadow(0 20px 50px rgba(0,0,0,.55));
+  }
+  #board{
+    width:100%; height:100%;
+    display:block;
+    border-radius:22px;
+  }
+
+  /* Full-screen confetti overlay */
+  #confetti{
+    position:fixed; inset:0;
+    pointer-events:none;
+    z-index:40;
+  }
+
+  /* Canvas shows a pointer cursor while a drop is allowed (tap-to-drop). */
+  #board.ready{ cursor:pointer; }
+
+  /* ============================================================
+     GEAR / ADMIN TOGGLE
+     ============================================================ */
+  #gear{
+    position:fixed; top:14px; right:14px;
+    width:46px; height:46px; border-radius:12px;
+    border:1px solid rgba(255,255,255,.15);
+    background:rgba(20,22,40,.7);
+    backdrop-filter:blur(8px);
+    color:var(--ink);
+    font-size:22px; cursor:pointer;
+    z-index:60;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .3s ease, background .2s;
+  }
+  #gear:hover{ transform:rotate(45deg); background:rgba(40,44,80,.8); }
+
+  /* ============================================================
+     ADMIN PANEL
+     ============================================================ */
+  #admin{
+    position:fixed; top:0; right:0; bottom:0;
+    width:380px; max-width:92vw;
+    background:linear-gradient(180deg,var(--panel),#12142400);
+    background-color:var(--panel);
+    border-left:1px solid rgba(255,255,255,.08);
+    box-shadow:-18px 0 40px rgba(0,0,0,.5);
+    transform:translateX(105%);
+    transition:transform .35s cubic-bezier(.4,0,.2,1);
+    z-index:55;
+    display:flex; flex-direction:column;
+  }
+  #admin.open{ transform:translateX(0); }
+  #admin header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 18px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+    background:var(--panel-2);
+  }
+  #admin header h2{ margin:0; font-size:17px; letter-spacing:.5px; }
+  #admin .body{ overflow-y:auto; padding:16px 18px 40px; }
+  #admin .close{
+    background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;line-height:1;
+  }
+
+  .section{
+    background:var(--panel-2);
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:16px;
+  }
+  .section h3{
+    margin:0 0 12px; font-size:13px; text-transform:uppercase;
+    letter-spacing:1px; color:var(--neon2);
+  }
+  label{ display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
+  input[type=text],input[type=number]{
+    width:100%; padding:9px 10px; border-radius:9px;
+    border:1px solid rgba(255,255,255,.12);
+    background:#0e1122; color:var(--ink); font-size:14px;
+    outline:none;
+  }
+  input:focus{ border-color:var(--neon2); }
+  input[type=color]{
+    width:100%; height:38px; border-radius:9px; border:1px solid rgba(255,255,255,.12);
+    background:#0e1122; cursor:pointer;
+  }
+  .row{ display:flex; gap:10px; }
+  .row > *{ flex:1; }
+
+  .fileBtn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    width:100%; padding:8px; margin-top:4px;
+    background:#0e1122; border:1px dashed rgba(255,255,255,.2);
+    border-radius:9px; color:var(--muted); font-size:12px; cursor:pointer;
+    transition:.15s;
+  }
+  .fileBtn:hover{ border-color:var(--neon2); color:var(--ink); }
+  .fileBtn.set{ border-style:solid; border-color:var(--ok); color:var(--ok); }
+  .fileBtn input{ display:none; }
+
+  .slotCard{
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:12px; padding:12px; margin-bottom:10px;
+    background:#141830;
+  }
+  .slotCard .tag{
+    display:inline-block; font-size:11px; font-weight:700;
+    color:#0f1024; background:var(--gold);
+    padding:2px 8px; border-radius:20px; margin-bottom:8px;
+  }
+  .btn{
+    width:100%; padding:11px; border:none; border-radius:10px;
+    font-weight:800; font-size:14px; cursor:pointer; color:#fff;
+    background:linear-gradient(90deg,var(--neon2),#0b8f8c);
+  }
+  .btn.secondary{ background:#2a2f4d; }
+  .pctWarn{ font-size:11px; color:var(--gold); margin-top:6px; }
+
+  /* Music mini controls */
+  .music-row{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+  .iconBtn{
+    width:42px;height:42px;border-radius:10px;border:none;cursor:pointer;
+    background:#0e1122;color:var(--ink);font-size:18px;
+    border:1px solid rgba(255,255,255,.12);
+  }
+  .iconBtn:hover{ background:#1a1f3a; }
+  input[type=range]{ width:100%; accent-color:var(--neon); }
+
+  /* ============================================================
+     WIN MODAL
+     ============================================================ */
+  #modal{
+    position:fixed; inset:0; z-index:70;
+    display:none; align-items:center; justify-content:center;
+    background:radial-gradient(circle at center, rgba(10,8,30,.75), rgba(0,0,0,.9));
+    backdrop-filter:blur(4px);
+  }
+  #modal.show{ display:flex; }
+  .prizeCard{
+    position:relative;
+    width:min(90vw,440px);
+    background:linear-gradient(160deg,#20243b,#12142b);
+    border:2px solid var(--gold);
+    border-radius:24px;
+    padding:28px 26px 26px;
+    text-align:center;
+    box-shadow:0 0 60px rgba(255,217,61,.35),0 30px 60px rgba(0,0,0,.6);
+    animation:popIn .5s cubic-bezier(.18,.9,.32,1.4);
+  }
+  @keyframes popIn{ from{ transform:scale(.6); opacity:0; } to{ transform:scale(1); opacity:1; } }
+  .winKicker{
+    font-size:15px; letter-spacing:3px; text-transform:uppercase;
+    color:var(--neon2); font-weight:800; margin-bottom:6px;
+    animation:blink 1s steps(2,start) infinite;
+  }
+  @keyframes blink{ 50%{ opacity:.35; } }
+  .prizeName{
+    font-size:32px; font-weight:900; line-height:1.1; margin:2px 0 16px;
+    background:linear-gradient(90deg,var(--gold),#fff6c2,var(--gold));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 2px 10px rgba(255,217,61,.25);
+    animation:wobble .7s ease-in-out infinite alternate;
+  }
+  @keyframes wobble{ from{ transform:rotate(-1.5deg) scale(1); } to{ transform:rotate(1.5deg) scale(1.03); } }
+  .prizeImgBox{
+    width:100%; height:230px; border-radius:16px; overflow:hidden;
+    background:#0e1122; display:flex; align-items:center; justify-content:center;
+    border:1px solid rgba(255,255,255,.1); margin-bottom:18px;
+  }
+  .prizeImgBox img{ width:100%; height:100%; object-fit:contain; }
+  .prizeImgBox .emoji{ font-size:120px; animation:wobble .7s ease-in-out infinite alternate; }
+  #playAgain{
+    width:100%; padding:15px; border:none; border-radius:14px; cursor:pointer;
+    font-size:18px; font-weight:900; letter-spacing:1px; text-transform:uppercase;
+    color:#fff; background:radial-gradient(circle at 35% 30%,#ff6b6b,#ff2e63 60%,#b3123f);
+    box-shadow:0 10px 24px rgba(179,18,63,.5);
+  }
+  #playAgain:active{ transform:scale(.97); }
+
+  .hint{ font-size:11px; color:var(--muted); margin-top:8px; line-height:1.5; }
+  audio{ display:none; }
+</style>
+</head>
+<body>
+
+  <!-- ============ GAME STAGE ============ -->
+  <div id="stage">
+    <div id="boardWrap">
+      <canvas id="board" width="720" height="820"></canvas>
+    </div>
+  </div>
+
+  <!-- ============ CONFETTI OVERLAY ============ -->
+  <canvas id="confetti"></canvas>
+
+  <!-- ============ ADMIN TOGGLE ============ -->
+  <button id="gear" title="Settings">⚙️</button>
+
+  <!-- ============ ADMIN PANEL ============ -->
+  <aside id="admin">
+    <header>
+      <h2>🎛️ Admin Panel</h2>
+      <button class="close" id="adminClose">×</button>
+    </header>
+    <div class="body">
+
+      <!-- SLOTS -->
+      <div class="section">
+        <h3>Slot Configuration</h3>
+        <label for="slotCount">Number of slots</label>
+        <input type="number" id="slotCount" min="2" max="12" step="1" />
+        <div id="slotList" style="margin-top:14px"></div>
+        <div id="pctWarn" class="pctWarn"></div>
+      </div>
+
+      <!-- BALL -->
+      <div class="section">
+        <h3>Plinko Ball</h3>
+        <label for="ballRadius">Ball size (radius): <b id="ballRadiusVal" style="color:var(--ink)"></b> px</label>
+        <input type="range" id="ballRadius" min="5" max="26" step="1" />
+        <label style="margin-top:12px">Ball color</label>
+        <input type="color" id="ballColor" />
+        <label class="fileBtn" id="ballImgLabel" style="margin-top:12px">🖼️ Upload ball image
+          <input type="file" id="ballImage" accept="image/*">
+        </label>
+        <div id="ballImgActions" style="display:none;margin-top:8px">
+          <button class="btn secondary" id="ballImgClear" style="padding:8px;font-size:12px">Remove image (use color)</button>
+        </div>
+        <p class="hint">The image is clipped into a circle matching the current ball size. With no image, the solid color is used.</p>
+      </div>
+
+      <!-- THEME -->
+      <div class="section">
+        <h3>Visual Theme</h3>
+        <div class="row" style="margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:6px;color:var(--ink);cursor:pointer">
+            <input type="radio" name="bgType" value="color"> Solid color
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;color:var(--ink);cursor:pointer">
+            <input type="radio" name="bgType" value="image"> Image
+          </label>
+        </div>
+        <div id="bgColorWrap">
+          <label>Background color</label>
+          <input type="color" id="bgColor" />
+        </div>
+        <div id="bgImageWrap" style="display:none">
+          <label class="fileBtn" id="bgImgLabel">🖼️ Upload background image
+            <input type="file" id="bgImage" accept="image/*">
+          </label>
+        </div>
+      </div>
+
+      <!-- MUSIC -->
+      <div class="section">
+        <h3>Background Music</h3>
+        <label class="fileBtn" id="musicLabel">🎵 Load local MP3
+          <input type="file" id="musicFile" accept="audio/*">
+        </label>
+        <div class="music-row">
+          <button class="iconBtn" id="musicToggle" title="Play / Pause">▶️</button>
+          <input type="range" id="musicVol" min="0" max="1" step="0.01" />
+        </div>
+        <p class="hint">Music files can't be saved between refreshes (browser security), but every other setting here is stored locally on this machine.</p>
+      </div>
+
+      <div class="section">
+        <button class="btn secondary" id="resetAll">Reset all settings</button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ============ WIN MODAL ============ -->
+  <div id="modal">
+    <div class="prizeCard">
+      <div class="winKicker">🎉 Winner! 🎉</div>
+      <div class="prizeName" id="prizeName">YOU WON!</div>
+      <div class="prizeImgBox" id="prizeImgBox"></div>
+      <button id="playAgain">Play Again</button>
+    </div>
+  </div>
+
+  <audio id="bgm" loop></audio>
+
+<script>
+"use strict";
+/* =================================================================
+   PLINKO ARCADE — single-file game
+   Sections:
+     1. Config + localStorage persistence
+     2. Board geometry
+     3. Physics + render loop
+     4. Web Audio (procedural SFX + music)
+     5. Confetti particle system
+     6. Win state + modal
+     7. Admin panel wiring
+   ================================================================= */
+
+/* ---------- constants ---------- */
+const BOARD_W = 720, BOARD_H = 820;
+const SLOT_H  = 132;          // height of the bins at the bottom
+/* Cabinet frame: the play field is inset from the canvas edge on all sides. */
+const FRAME     = 28;         // thickness of the outer cabinet walls
+const PLAY_L    = FRAME;              // inner-left wall (x)
+const PLAY_R    = BOARD_W - FRAME;    // inner-right wall (x)
+const PLAY_W    = BOARD_W - FRAME*2;  // playable width
+const TOP_FRAME = FRAME;              // inner-top wall (y)
+const PEG_R   = 9;            // peg radius
+const BALL_R  = 15;           // default ball radius
+// Fall speed is tuned so a drop takes ~5s. Gravity, the speed caps and the peg
+// kicks are all scaled together, so the bounce pattern looks the same — just slower.
+const GRAV    = 0.18;
+const REST    = 0.5;          // restitution off the walls
+const PEG_REST= 0.3;          // pegs are less bouncy, so the ball plops down instead of springing up
+const VY_MAX  = 11;
+const VX_MAX  = 10;           // cap horizontal speed so it stays proportional to the fall
+const STORE_KEY = "plinkoConfig_v1";
+
+/* ---------- DOM ---------- */
+const canvas  = document.getElementById("board");
+const ctx     = canvas.getContext("2d");
+const conf    = document.getElementById("confetti");
+const cctx    = conf.getContext("2d");
+
+/* ---------- runtime state ---------- */
+let config;                    // persisted settings
+let pegs = [];                 // {x,y,hit}
+let slotWidth, firstPegY, lastPegY, slotTopY, floorY, R;
+let ball = null;               // {x,y,vx,vy,r}
+let hoverX = null;             // cursor x (board coords) for the drop marker
+let activeSlots = [];          // slots currently on the board (inventory > 0)
+let boardEmpty = false;        // true when every prize is depleted
+let gameState = "idle";        // idle | dropping | won
+const imgCache = {};           // dataURL -> HTMLImageElement
+
+/* =================================================================
+   1. CONFIG + PERSISTENCE
+   ================================================================= */
+function defaultConfig(){
+  const names = ["Sticker","Keychain","T-Shirt","Gift Card","Mug","Grand Prize"];
+  const slots = [];
+  for(let i=0;i<5;i++){
+    slots.push({ name:names[i]||("Prize "+(i+1)), inventory:5, slotImg:"", prizeImg:"" });
+  }
+  return {
+    slots,
+    theme:{ type:"color", color:"#0f1024", image:"" },
+    ball:{ radius:15, color:"#ffd93d", image:"" },
+    volume:0.6
+  };
+}
+
+function loadConfig(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){
+      const c = JSON.parse(raw);
+      if(c && Array.isArray(c.slots) && c.slots.length>=2){
+        // Normalize older saved configs (pre-ball-customization / pre-inventory).
+        c.theme = Object.assign({ type:"color", color:"#0f1024", image:"" }, c.theme||{});
+        c.ball  = Object.assign({ radius:15, color:"#ffd93d", image:"" }, c.ball||{});
+        c.slots.forEach(s=>{                       // ensure every slot has an inventory count
+          if(s.inventory == null) s.inventory = 5;
+          delete s.percent;                        // old weighting field is no longer used
+        });
+        return c;
+      }
+    }
+  }catch(e){ /* ignore corrupt storage */ }
+  return defaultConfig();
+}
+
+function saveConfig(){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify(config));
+  }catch(e){
+    // Most likely quota exceeded from large uploaded images.
+    console.warn("Could not persist config:", e);
+    alert("Settings are active for this session, but couldn't be saved permanently — the uploaded images are too large for local storage.");
+  }
+}
+
+/* Return (and cache) an Image object for a data URL, or null. */
+function getImg(dataURL){
+  if(!dataURL) return null;
+  if(imgCache[dataURL]) return imgCache[dataURL];
+  const img = new Image();
+  img.src = dataURL;
+  imgCache[dataURL] = img;
+  return img;
+}
+
+/* =================================================================
+   2. BOARD GEOMETRY  (triangular peg grid + slots)
+   ================================================================= */
+function buildBoard(){
+  // Only slots with stock remaining appear on the board.
+  activeSlots = config.slots.filter(s => (parseInt(s.inventory)||0) > 0);
+  boardEmpty  = activeSlots.length === 0;
+  const S = Math.max(1, activeSlots.length);
+  slotWidth = PLAY_W / S;                           // slots span the inner play area
+
+  // Fewer rows: enough for a good random spread, but the ball hits less often
+  // so it plops down rather than springing back up repeatedly.
+  R = Math.max(6, Math.min(9, S + 2));              // number of peg rows
+  const topMargin = 150;                            // launch band height above first row
+  slotTopY  = BOARD_H - SLOT_H;
+  floorY    = BOARD_H - 14;
+  const pegBottom = slotTopY - 70;                  // gap between last row and the bins (settling room)
+  const rowGap    = (pegBottom - topMargin) / (R - 1);
+
+  // ---- Rectangular grid: every row has the SAME number of pegs, alternate rows
+  //      offset by half a cell (staggered/brick). Peg spacing SCALES WITH THE BALL:
+  //      the gap between pegs is just a bit WIDER than the ball, so it passes through
+  //      and then lands on the peg staggered directly below that gap, which knocks it
+  //      left or right. Every row is a fresh coin-flip → a true wide random spread
+  //      (a Galton board). Too wide and it threads straight down; too narrow and it
+  //      jams on the peg tops — this keeps the gap in the sweet spot for any ball.
+  const inset   = PEG_R + 8;                                // keep end pegs off the walls
+  const usable  = PLAY_W - 2*inset;
+  const ballDia = 2 * Math.max(4, parseInt(config.ball.radius) || BALL_R);
+  const desired = Math.max(30, ballDia + 2*PEG_R + 16);     // gap ≈ ballDia + 16 (accounts for peg size)
+  const columns = Math.max(5, Math.min(12, Math.round(usable/desired + 0.5)));
+  const spacing = usable / (columns - 0.5);                 // half-cell fits the stagger
+
+  pegs = [];
+  for(let r=0; r<R; r++){
+    const rowY   = topMargin + r * rowGap;
+    const offset = (r % 2) ? spacing/2 : 0;                 // stagger odd rows
+    for(let i=0;i<columns;i++){
+      pegs.push({ x: PLAY_L + inset + offset + i*spacing, y: rowY, hit:0 });
+    }
+  }
+  firstPegY = topMargin;
+  lastPegY  = pegBottom;
+}
+
+/* =================================================================
+   3. PHYSICS + RENDER
+   ================================================================= */
+/* Drop a ball at the tapped X. Only fires when idle (prevents spamming). */
+function launchBallAt(x){
+  if(gameState !== "idle" || boardEmpty) return;
+  ensureAudio();                          // audio context needs a user gesture
+  const r = Math.max(4, parseFloat(config.ball.radius) || BALL_R);   // radius driven by admin setting
+  ball = {
+    x: Math.max(PLAY_L + r + 1, Math.min(PLAY_R - r - 1, x)),        // spawn under the tap, clamped inside the walls
+    y: TOP_FRAME + r + 8,
+    vx: 0,                                // no sideways kick, so it falls straight beneath the tap
+    vy: 0,
+    r,
+    maxY: TOP_FRAME + r + 8,              // deepest point reached (anti-stuck watchdog)
+    stuck: 0
+  };
+  gameState = "dropping";
+  canvas.classList.remove("ready");       // no drops allowed while a ball is live
+}
+
+function stepPhysics(){
+  if(gameState !== "dropping" || !ball) return;
+
+  ball.vy += GRAV;
+  if(ball.vy > VY_MAX) ball.vy = VY_MAX;
+
+  // --- True random physics: no steering. The ball falls from where it was
+  //     tapped and lands wherever the pegs bounce it. Just a little air damping.
+  ball.vx *= 0.99;
+  if(ball.vx >  VX_MAX) ball.vx =  VX_MAX;
+  if(ball.vx < -VX_MAX) ball.vx = -VX_MAX;
+
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // --- Cabinet walls (position is clamped, so the ball can never tunnel out
+  //     no matter how fast it is going; velocity reflects with restitution).
+  if(ball.x < PLAY_L + ball.r){ ball.x = PLAY_L + ball.r; ball.vx = Math.abs(ball.vx)*REST; }
+  if(ball.x > PLAY_R - ball.r){ ball.x = PLAY_R - ball.r; ball.vx = -Math.abs(ball.vx)*REST; }
+  if(ball.y < TOP_FRAME + ball.r){ ball.y = TOP_FRAME + ball.r; ball.vy = Math.abs(ball.vy)*REST; }
+
+  // --- Peg collisions
+  for(const p of pegs){
+    const dx = ball.x - p.x, dy = ball.y - p.y;
+    const d  = Math.hypot(dx,dy);
+    const min = ball.r + PEG_R;
+    if(d < min && d > 0.0001){
+      const nx = dx/d, ny = dy/d;
+      const overlap = min - d;
+      ball.x += nx*overlap;               // push out of the peg
+      ball.y += ny*overlap;
+      const vn = ball.vx*nx + ball.vy*ny; // velocity along the normal
+      if(vn < 0){
+        ball.vx -= (1+PEG_REST)*vn*nx;
+        ball.vy -= (1+PEG_REST)*vn*ny;
+        if(ball.vy < 0) ball.vy *= 0.5;   // kill most upward rebound → less bouncing back up
+        // Decisive random left/right kick on every peg hit. Strong enough to carry
+        // the ball to an adjacent column, so it can never sit in a stable channel —
+        // this is what turns the fall into a real, wide, random Galton spread.
+        // It leans toward the side the ball actually struck, with a chance to flip.
+        const side = nx > 0.05 ? 1 : nx < -0.05 ? -1 : (Math.random()<0.5?-1:1);
+        const dir  = Math.random() < 0.78 ? side : -side;
+        ball.vx += dir * (1.85 + Math.random()*2.25);
+        p.hit = performance.now();             // trigger peg glow
+        plink();
+      }
+    }
+  }
+
+  // --- Anti-stuck watchdog: if the ball hasn't made downward progress for a
+  //     while (wedged in a wall/peg corner, or balanced), shove it loose and
+  //     inward so it can never hang forever.
+  if(ball.y > ball.maxY + 0.3){ ball.maxY = ball.y; ball.stuck = 0; }
+  else if(++ball.stuck > 45){
+    ball.vy = Math.max(ball.vy, 1.8);
+    ball.vx += (ball.x > BOARD_W/2 ? -1 : 1) * (1.4 + Math.random()*1.4);
+    ball.stuck = 0;
+  }
+
+  // --- Slot divider walls: a rounded post on top plus a vertical wall below,
+  //     so once the ball drops between two dividers it physically stays in that
+  //     bin. Position corrections here are only ever a few px (never a jump).
+  const S = activeSlots.length;
+  for(let i=1;i<S;i++){
+    const dxPos = PLAY_L + i*slotWidth;
+    const cdx = ball.x - dxPos, cdy = ball.y - slotTopY;      // vs the rounded post top
+    const cd = Math.hypot(cdx, cdy), cmin = ball.r + 5;
+    if(cd < cmin && cd > 0.0001){
+      const nx = cdx/cd, ny = cdy/cd;
+      ball.x += nx*(cmin-cd); ball.y += ny*(cmin-cd);
+      const vn = ball.vx*nx + ball.vy*ny;
+      if(vn < 0){ ball.vx -= (1+REST)*vn*nx; ball.vy -= (1+REST)*vn*ny; }
+    }
+    if(ball.y > slotTopY && Math.abs(ball.x - dxPos) < ball.r){ // vertical wall below the post
+      if(ball.x < dxPos){ ball.x = dxPos - ball.r; if(ball.vx>0) ball.vx = -ball.vx*REST; }
+      else              { ball.x = dxPos + ball.r; if(ball.vx<0) ball.vx = -ball.vx*REST; }
+    }
+  }
+
+  // --- Final containment: a peg/divider pushout can nudge the ball toward a
+  //     wall after the earlier clamp, so re-clamp here — the ball is NEVER
+  //     outside the walls at the end of a frame.
+  if(ball.x < PLAY_L + ball.r) ball.x = PLAY_L + ball.r;
+  if(ball.x > PLAY_R - ball.r) ball.x = PLAY_R - ball.r;
+
+  // --- Landing: the winning slot is exactly the bin the ball has settled into.
+  if(ball.y + ball.r >= floorY){
+    ball.y = floorY - ball.r;
+    let idx = Math.floor((ball.x - PLAY_L) / slotWidth);
+    idx = Math.max(0, Math.min(S-1, idx));
+    win(idx);
+  }
+}
+
+function drawBoard(){
+  ctx.clearRect(0,0,BOARD_W,BOARD_H);
+
+  // ---- Cabinet outer frame (the solid walls of the box) ----
+  roundRect(ctx, 1,1, BOARD_W-2, BOARD_H-2, 26);
+  const frame = ctx.createLinearGradient(0,0,BOARD_W,BOARD_H);
+  frame.addColorStop(0,"#3b2350");
+  frame.addColorStop(.5,"#241636");
+  frame.addColorStop(1,"#3b2350");
+  ctx.fillStyle = frame; ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255,46,99,.65)"; ctx.stroke();   // neon cabinet trim
+  // inner bevel highlight around the frame
+  roundRect(ctx, 4,4, BOARD_W-8, BOARD_H-8, 23);
+  ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.stroke();
+
+  // ---- Recessed inner play field ----
+  roundRect(ctx, PLAY_L, TOP_FRAME, PLAY_W, BOARD_H - TOP_FRAME - 8, 14);
+  const g = ctx.createLinearGradient(0,TOP_FRAME,0,BOARD_H);
+  g.addColorStop(0,"#141726");
+  g.addColorStop(1,"#0b0d1a");
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.stroke();  // recess shadow
+  ctx.save();                       // clip everything else to the play field
+  roundRect(ctx, PLAY_L, TOP_FRAME, PLAY_W, BOARD_H - TOP_FRAME - 8, 14);
+  ctx.clip();
+
+  drawLaunchZone();
+
+  const now = performance.now();
+
+  // Pegs (with fading glow on recent hits)
+  for(const p of pegs){
+    const since = now - p.hit;
+    if(p.hit && since < 220){
+      const a = 1 - since/220;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y, PEG_R+6*a, 0, Math.PI*2);
+      ctx.fillStyle = "rgba(8,217,214,"+(a*0.5)+")";
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(p.x,p.y, PEG_R, 0, Math.PI*2);
+    ctx.fillStyle = "#e9edff";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p.x-2,p.y-2, PEG_R*0.5, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255,255,255,.9)";
+    ctx.fill();
+  }
+
+  drawSlots();
+
+  drawBall();
+
+  ctx.restore();          // end play-field clip
+}
+
+/* Draw the top launch zone. When idle, it invites a tap and follows the mouse
+   with a drop marker so the player sees exactly where the ball will fall. */
+function drawLaunchZone(){
+  const y0 = TOP_FRAME, y1 = firstPegY;
+  // zone band
+  ctx.fillStyle = gameState === "idle" ? "rgba(8,217,214,.08)" : "rgba(255,255,255,.02)";
+  ctx.fillRect(PLAY_L, y0, PLAY_W, y1 - y0);
+  // dashed lower boundary
+  ctx.save();
+  ctx.setLineDash([8,7]);
+  ctx.strokeStyle = "rgba(8,217,214,.35)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(PLAY_L, y1); ctx.lineTo(PLAY_R, y1); ctx.stroke();
+  ctx.restore();
+
+  if(gameState === "idle" && !boardEmpty){
+    const pulse = 0.6 + 0.4*Math.sin(performance.now()/350);
+    ctx.fillStyle = `rgba(238,241,255,${0.55*pulse})`;
+    ctx.font = "700 20px Segoe UI, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("👆  TAP ANYWHERE UP HERE TO DROP", BOARD_W/2, (y0+y1)/2 - 6);
+
+    // marker showing where a drop would land, tracking the cursor
+    if(hoverX !== null){
+      const mx = Math.max(PLAY_L+6, Math.min(PLAY_R-6, hoverX));
+      ctx.strokeStyle = `rgba(255,217,61,${0.5+0.4*pulse})`;
+      ctx.setLineDash([4,4]); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(mx, y1); ctx.lineTo(mx, y1+34); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(mx, y0+14, 6, 0, Math.PI*2);
+      ctx.fillStyle = "rgba(255,217,61,.9)"; ctx.fill();
+    }
+  }
+}
+
+/* Draw the ball: custom image clipped to a circle, else a shaded solid color.
+   Everything keys off ball.r so appearance always tracks the configured size. */
+function drawBall(){
+  if(!ball) return;
+  const r = ball.r;
+  const img = getImg(config.ball.image);
+
+  if(img && img.complete && img.naturalWidth){
+    // Clip the uploaded image into a perfect circle (cover-fit).
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, r, 0, Math.PI*2);
+    ctx.clip();
+    const ar = img.naturalWidth / img.naturalHeight;
+    let dw, dh;
+    if(ar > 1){ dh = r*2; dw = r*2*ar; } else { dw = r*2; dh = r*2/ar; }
+    ctx.drawImage(img, ball.x - dw/2, ball.y - dh/2, dw, dh);
+    ctx.restore();
+    // rim + subtle sheen so it still reads as a 3D ball
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, r, 0, Math.PI*2);
+    ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(ball.x - r*0.3, ball.y - r*0.3, r*0.32, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255,255,255,.22)"; ctx.fill();
+  }else{
+    // Solid color with a radial highlight for depth.
+    const c = config.ball.color || "#ffd93d";
+    const grd = ctx.createRadialGradient(ball.x - r*0.35, ball.y - r*0.35, 1, ball.x, ball.y, r);
+    grd.addColorStop(0,  shade(c, 0.55));
+    grd.addColorStop(.45, c);
+    grd.addColorStop(1,  shade(c, -0.35));
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, r, 0, Math.PI*2);
+    ctx.fillStyle = grd; ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+}
+
+function drawSlots(){
+  if(boardEmpty){
+    ctx.fillStyle = "rgba(255,217,61,.95)";
+    ctx.font = "800 30px Segoe UI, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("ALL PRIZES CLAIMED", BOARD_W/2, slotTopY + SLOT_H/2 - 12);
+    ctx.fillStyle = "rgba(238,241,255,.7)";
+    ctx.font = "600 15px Segoe UI, sans-serif";
+    ctx.fillText("Restock inventory in ⚙️ settings", BOARD_W/2, slotTopY + SLOT_H/2 + 20);
+    return;
+  }
+  const S = activeSlots.length;
+  const palette = ["#ff2e63","#08d9d6","#ffd93d","#a06bff","#3ddc84","#ff8c42","#ff5ea8","#4d9bff","#f9c74f","#43aa8b","#f94144","#577590"];
+  for(let i=0;i<S;i++){
+    const x = PLAY_L + i*slotWidth;
+    const col = palette[i % palette.length];
+
+    // bin body
+    roundRect(ctx, x+3, slotTopY, slotWidth-6, SLOT_H-4, 10);
+    const g = ctx.createLinearGradient(0,slotTopY,0,BOARD_H);
+    g.addColorStop(0, hexA(col,.30));
+    g.addColorStop(1, hexA(col,.85));
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = hexA(col,.9); ctx.lineWidth = 2; ctx.stroke();
+
+    // divider peg on top edge (little post between bins)
+    if(i>0){
+      ctx.beginPath();
+      ctx.arc(x, slotTopY-4, 5, 0, Math.PI*2);
+      ctx.fillStyle="#e9edff"; ctx.fill();
+    }
+
+    const s = activeSlots[i];
+    const img = getImg(s.slotImg);
+    if(img && img.complete && img.naturalWidth){
+      const pad=8, iw=slotWidth-6-pad*2, ih=SLOT_H-44;
+      ctx.save();
+      roundRect(ctx, x+3+pad, slotTopY+6, iw, ih, 8); ctx.clip();
+      // cover fit
+      const ar = img.naturalWidth/img.naturalHeight, boxAr = iw/ih;
+      let dw,dh;
+      if(ar>boxAr){ dh=ih; dw=ih*ar; } else { dw=iw; dh=iw/ar; }
+      ctx.drawImage(img, x+3+pad+(iw-dw)/2, slotTopY+6+(ih-dh)/2, dw, dh);
+      ctx.restore();
+    }
+
+    // name label
+    ctx.fillStyle = "#0f1024";
+    ctx.font = "700 "+Math.max(10, Math.min(15, slotWidth*0.14))+"px Segoe UI, sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    const label = (s.name||"").slice(0,16);
+    ctx.fillText(label, x+slotWidth/2, BOARD_H-16, slotWidth-10);
+
+    // remaining-inventory badge (top-right of the bin)
+    const qty = parseInt(s.inventory)||0;
+    const bx = x + slotWidth - 16, by = slotTopY + 13;
+    ctx.beginPath(); ctx.arc(bx, by, 13, 0, Math.PI*2);
+    ctx.fillStyle = "#0f1024"; ctx.fill();
+    ctx.strokeStyle = hexA(col,.95); ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "800 13px Segoe UI, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("×"+qty, bx, by+1);
+  }
+}
+
+/* Master animation loop (physics + board + confetti).
+   Physics runs on a FIXED 60 Hz timestep, decoupled from the display refresh
+   rate, so a drop takes the same ~5 seconds whether the monitor is 60 Hz or 120 Hz. */
+let _lastT = 0, _acc = 0;
+const PHYS_STEP = 1000/60;      // ms of simulated time per physics step
+function loop(ts){
+  try{
+    if(!_lastT) _lastT = ts;
+    _acc += ts - _lastT; _lastT = ts;
+    _acc = Math.min(_acc, 250);         // cap catch-up (e.g. after the tab was backgrounded)
+    let steps = 0;
+    while(_acc >= PHYS_STEP && steps < 8){ stepPhysics(); _acc -= PHYS_STEP; steps++; }
+    drawBoard();
+    drawConfetti();
+  }catch(err){ console.error(err); }
+  requestAnimationFrame(loop);
+}
+
+/* =================================================================
+   4. WEB AUDIO — procedural SFX + uploaded music
+   ================================================================= */
+let audioCtx = null;
+let lastPlink = 0;
+const bgm = document.getElementById("bgm");
+
+function ensureAudio(){
+  if(!audioCtx){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+  }
+  if(audioCtx.state === "suspended") audioCtx.resume();
+}
+
+/* Short procedural "plink" on every peg hit (throttled). */
+function plink(){
+  if(!audioCtx) return;
+  const t = performance.now();
+  if(t - lastPlink < 22) return;   // throttle to avoid audio spam
+  lastPlink = t;
+
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain= audioCtx.createGain();
+  osc.type = "triangle";
+  const f = 420 + Math.random()*520;
+  osc.frequency.setValueAtTime(f, now);
+  osc.frequency.exponentialRampToValueAtTime(f*0.6, now+0.09);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.25, now+0.005);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now+0.11);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now+0.13);
+}
+
+/* Celebratory ascending fanfare when the ball lands. */
+function winChime(){
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C5 E5 G5 C6 E6
+  notes.forEach((f,i)=>{
+    const t = now + i*0.11;
+    const osc = audioCtx.createOscillator();
+    const gain= audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(f, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.22, t+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t+0.35);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t+0.4);
+  });
+  // sparkle tail
+  const t2 = now + notes.length*0.11;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type="triangle";
+  o.frequency.setValueAtTime(1568, t2);
+  o.frequency.exponentialRampToValueAtTime(2637, t2+0.25);
+  g.gain.setValueAtTime(0.0001, t2);
+  g.gain.exponentialRampToValueAtTime(0.18, t2+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, t2+0.5);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t2); o.stop(t2+0.55);
+}
+
+/* =================================================================
+   5. CONFETTI PARTICLE SYSTEM
+   ================================================================= */
+let confettiParts = [];
+function sizeConfetti(){
+  const dpr = window.devicePixelRatio || 1;
+  conf.width  = window.innerWidth  * dpr;
+  conf.height = window.innerHeight * dpr;
+  cctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function burstConfetti(){
+  const colors = ["#ff2e63","#08d9d6","#ffd93d","#a06bff","#3ddc84","#ff8c42","#ffffff"];
+  const W = window.innerWidth;
+  confettiParts = [];
+  for(let i=0;i<240;i++){
+    confettiParts.push({
+      x: Math.random()*W,
+      y: -20 - Math.random()*window.innerHeight*0.5,
+      vx:(Math.random()-0.5)*4,
+      vy: 2 + Math.random()*5,
+      w: 6+Math.random()*8,
+      h: 8+Math.random()*10,
+      rot: Math.random()*Math.PI,
+      vr:(Math.random()-0.5)*0.3,
+      color: colors[(Math.random()*colors.length)|0]
+    });
+  }
+}
+function drawConfetti(){
+  if(!confettiParts.length){ cctx.clearRect(0,0,conf.width,conf.height); return; }
+  cctx.clearRect(0,0,window.innerWidth,window.innerHeight);
+  const H = window.innerHeight;
+  for(const p of confettiParts){
+    p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.rot += p.vr;
+    cctx.save();
+    cctx.translate(p.x,p.y); cctx.rotate(p.rot);
+    cctx.fillStyle = p.color;
+    cctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+    cctx.restore();
+  }
+  confettiParts = confettiParts.filter(p => p.y < H + 40);
+}
+
+/* =================================================================
+   6. WIN STATE + MODAL
+   ================================================================= */
+const modal      = document.getElementById("modal");
+const prizeName  = document.getElementById("prizeName");
+const prizeImgBox= document.getElementById("prizeImgBox");
+let modalTimer   = 0;
+
+function win(idx){
+  gameState = "won";
+  const slot = activeSlots[idx];
+  // Remove one from this prize's inventory and persist the new count.
+  slot.inventory = Math.max(0, (parseInt(slot.inventory)||0) - 1);
+  saveConfig();
+  renderSlotEditor();                    // reflect the new count in the admin panel
+  winChime();
+  burstConfetti();
+
+  prizeName.textContent = "YOU WON " + ((slot.name||"a prize").toUpperCase()) + "!";
+  prizeImgBox.innerHTML = "";
+  const src = slot.prizeImg || slot.slotImg;
+  if(src){
+    const img = new Image();
+    img.src = src;
+    prizeImgBox.appendChild(img);
+  }else{
+    const e = document.createElement("div");
+    e.className = "emoji";
+    e.textContent = "🎁";
+    prizeImgBox.appendChild(e);
+  }
+  clearTimeout(modalTimer);
+  modalTimer = setTimeout(()=> modal.classList.add("show"), 350);
+}
+
+function playAgain(){
+  clearTimeout(modalTimer);           // cancel a pending open if reset happens fast
+  modal.classList.remove("show");
+  confettiParts = [];
+  cctx.clearRect(0,0,conf.width,conf.height);
+  ball = null;
+  gameState = "idle";                 // taps are accepted again now that the round is over
+  buildBoard();                       // rebuild: any prize that just hit 0 leaves the board
+  canvas.classList.toggle("ready", !boardEmpty);   // no taps once everything is claimed
+}
+
+/* =================================================================
+   7. ADMIN PANEL WIRING
+   ================================================================= */
+const admin      = document.getElementById("admin");
+const slotCountEl= document.getElementById("slotCount");
+const slotListEl = document.getElementById("slotList");
+const pctWarnEl  = document.getElementById("pctWarn");
+
+document.getElementById("gear").onclick      = ()=> admin.classList.toggle("open");
+document.getElementById("adminClose").onclick= ()=> admin.classList.remove("open");
+
+/* Read a File input as a data URL. */
+function readFileAsDataURL(file, cb){
+  const fr = new FileReader();
+  fr.onload = ()=> cb(fr.result);
+  fr.readAsDataURL(file);
+}
+
+/* Rebuild the per-slot editor cards. */
+function renderSlotEditor(){
+  slotCountEl.value = config.slots.length;
+  slotListEl.innerHTML = "";
+  config.slots.forEach((slot, i)=>{
+    const card = document.createElement("div");
+    card.className = "slotCard";
+    card.innerHTML = `
+      <span class="tag">Slot ${i+1}</span>
+      <label>Prize name</label>
+      <input type="text" data-i="${i}" data-k="name" value="${escapeHtml(slot.name)}" />
+      <label style="margin-top:8px">Inventory (qty remaining)</label>
+      <input type="number" min="0" step="1" data-i="${i}" data-k="inventory" value="${slot.inventory}" />
+      <label class="fileBtn ${slot.slotImg?'set':''}" style="margin-top:10px">
+        ${slot.slotImg?'✓ Slot image set':'🖼️ Slot image'}
+        <input type="file" accept="image/*" data-i="${i}" data-k="slotImg">
+      </label>
+      <label class="fileBtn ${slot.prizeImg?'set':''}">
+        ${slot.prizeImg?'✓ Grand prize image set':'🏆 Grand prize image'}
+        <input type="file" accept="image/*" data-i="${i}" data-k="prizeImg">
+      </label>
+    `;
+    slotListEl.appendChild(card);
+  });
+
+  // text / number inputs
+  slotListEl.querySelectorAll('input[type=text],input[type=number]').forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const i = +e.target.dataset.i, k = e.target.dataset.k;
+      if(k === "inventory"){
+        config.slots[i].inventory = Math.max(0, parseInt(e.target.value) || 0);
+        buildBoard();                          // slot appears/disappears from the board live
+        canvas.classList.toggle("ready", !boardEmpty && gameState === "idle");
+      }else{
+        config.slots[i][k] = e.target.value;
+      }
+      updateInvSummary();
+      saveConfig();
+    });
+  });
+  // image inputs
+  slotListEl.querySelectorAll('input[type=file]').forEach(inp=>{
+    inp.addEventListener("change", e=>{
+      const f = e.target.files[0]; if(!f) return;
+      const i = +e.target.dataset.i, k = e.target.dataset.k;
+      readFileAsDataURL(f, url=>{
+        config.slots[i][k] = url;
+        saveConfig();
+        renderSlotEditor();          // refresh "set" state on the button
+      });
+    });
+  });
+  updateInvSummary();
+}
+
+function updateInvSummary(){
+  const total = config.slots.reduce((a,s)=> a + (parseInt(s.inventory)||0), 0);
+  pctWarnEl.textContent = total > 0
+    ? `Total inventory remaining: ${total}. A bin leaves the board when its count hits 0.`
+    : "Everything is out of stock — set an inventory above 0 to bring a bin back.";
+}
+
+/* Slot count change: resize the slots array, preserving existing entries. */
+slotCountEl.addEventListener("change", ()=>{
+  let n = Math.max(2, Math.min(12, parseInt(slotCountEl.value)||2));
+  const cur = config.slots;
+  if(n > cur.length){
+    for(let i=cur.length;i<n;i++)
+      cur.push({ name:"Prize "+(i+1), inventory:5, slotImg:"", prizeImg:"" });
+  }else{
+    cur.length = n;
+  }
+  renderSlotEditor();
+  buildBoard();
+  saveConfig();
+});
+
+/* ---------- Theme controls ---------- */
+const bgColorEl   = document.getElementById("bgColor");
+const bgColorWrap = document.getElementById("bgColorWrap");
+const bgImageWrap = document.getElementById("bgImageWrap");
+const bgImgLabel  = document.getElementById("bgImgLabel");
+
+function applyTheme(){
+  if(config.theme.type === "image" && config.theme.image){
+    document.body.style.background = `center/cover no-repeat fixed url("${config.theme.image}")`;
+  }else{
+    document.body.style.background = config.theme.color;
+  }
+}
+function syncThemeControls(){
+  document.querySelectorAll('input[name=bgType]').forEach(r=>{
+    r.checked = (r.value === config.theme.type);
+  });
+  bgColorEl.value = /^#/.test(config.theme.color) ? config.theme.color : "#0f1024";
+  bgColorWrap.style.display = config.theme.type === "color" ? "" : "none";
+  bgImageWrap.style.display = config.theme.type === "image" ? "" : "none";
+  bgImgLabel.classList.toggle("set", !!config.theme.image);
+  bgImgLabel.firstChild.textContent = config.theme.image ? "✓ Background image set " : "🖼️ Upload background image ";
+}
+
+document.querySelectorAll('input[name=bgType]').forEach(r=>{
+  r.addEventListener("change", ()=>{
+    config.theme.type = r.value;
+    syncThemeControls(); applyTheme(); saveConfig();
+  });
+});
+bgColorEl.addEventListener("input", ()=>{
+  config.theme.color = bgColorEl.value;
+  applyTheme(); saveConfig();
+});
+document.getElementById("bgImage").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  readFileAsDataURL(f, url=>{
+    config.theme.image = url; config.theme.type = "image";
+    syncThemeControls(); applyTheme(); saveConfig();
+  });
+});
+
+/* ---------- Ball controls ---------- */
+const ballRadiusEl = document.getElementById("ballRadius");
+const ballRadiusVal= document.getElementById("ballRadiusVal");
+const ballColorEl  = document.getElementById("ballColor");
+const ballImgLabel = document.getElementById("ballImgLabel");
+const ballImgActions = document.getElementById("ballImgActions");
+
+function syncBallControls(){
+  ballRadiusEl.value = config.ball.radius;
+  ballRadiusVal.textContent = config.ball.radius;
+  ballColorEl.value = /^#/.test(config.ball.color) ? config.ball.color : "#ffd93d";
+  ballImgLabel.classList.toggle("set", !!config.ball.image);
+  ballImgLabel.firstChild.textContent = config.ball.image ? "✓ Ball image set " : "🖼️ Upload ball image ";
+  ballImgActions.style.display = config.ball.image ? "block" : "none";
+}
+ballRadiusEl.addEventListener("input", ()=>{
+  config.ball.radius = parseInt(ballRadiusEl.value);
+  ballRadiusVal.textContent = config.ball.radius;
+  if(ball) ball.r = config.ball.radius;      // live update even mid-drop
+  buildBoard();                              // peg spacing scales with ball size
+  saveConfig();
+});
+ballColorEl.addEventListener("input", ()=>{
+  config.ball.color = ballColorEl.value;
+  saveConfig();
+});
+document.getElementById("ballImage").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  readFileAsDataURL(f, url=>{ config.ball.image = url; saveConfig(); syncBallControls(); });
+});
+document.getElementById("ballImgClear").addEventListener("click", ()=>{
+  config.ball.image = ""; saveConfig(); syncBallControls();
+});
+
+/* ---------- Music controls ---------- */
+const musicToggle = document.getElementById("musicToggle");
+const musicVol    = document.getElementById("musicVol");
+let musicURL = null;
+
+document.getElementById("musicFile").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  if(musicURL) URL.revokeObjectURL(musicURL);
+  musicURL = URL.createObjectURL(f);
+  bgm.src = musicURL;
+  bgm.volume = config.volume;
+  document.getElementById("musicLabel").classList.add("set");
+  bgm.play().then(()=> musicToggle.textContent="⏸️").catch(()=>{});
+});
+musicToggle.addEventListener("click", ()=>{
+  if(!bgm.src){ alert("Load an MP3 first."); return; }
+  if(bgm.paused){ bgm.play(); musicToggle.textContent="⏸️"; }
+  else{ bgm.pause(); musicToggle.textContent="▶️"; }
+});
+musicVol.addEventListener("input", ()=>{
+  config.volume = parseFloat(musicVol.value);
+  bgm.volume = config.volume;
+  saveConfig();
+});
+
+/* ---------- Reset ---------- */
+document.getElementById("resetAll").addEventListener("click", ()=>{
+  if(!confirm("Reset all slots, theme and settings to defaults?")) return;
+  config = defaultConfig();
+  saveConfig();
+  buildBoard(); renderSlotEditor(); syncThemeControls(); applyTheme(); syncBallControls();
+  musicVol.value = config.volume;
+});
+
+/* =================================================================
+   HELPERS
+   ================================================================= */
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y);
+  c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r);
+  c.arcTo(x,y,x+w,y,r);
+  c.closePath();
+}
+function hexA(hex,a){
+  const h = hex.replace("#","");
+  const n = parseInt(h.length===3 ? h.split("").map(c=>c+c).join("") : h, 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+/* Lighten (amt>0) or darken (amt<0) a hex color, amt in -1..1. */
+function shade(hex, amt){
+  const h = hex.replace("#","");
+  const n = parseInt(h.length===3 ? h.split("").map(c=>c+c).join("") : h, 16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  if(amt>=0){ r+=(255-r)*amt; g+=(255-g)*amt; b+=(255-b)*amt; }
+  else{ r*=(1+amt); g*=(1+amt); b*=(1+amt); }
+  return `rgb(${r|0},${g|0},${b|0})`;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+/* =================================================================
+   INIT
+   ================================================================= */
+function init(){
+  config = loadConfig();
+
+  // crisp canvas via devicePixelRatio
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = BOARD_W*dpr;
+  canvas.height = BOARD_H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  sizeConfetti();
+
+  buildBoard();
+  renderSlotEditor();
+  syncThemeControls();
+  applyTheme();
+  syncBallControls();
+  musicVol.value = config.volume;
+
+  document.getElementById("playAgain").addEventListener("click", playAgain);
+  window.addEventListener("resize", sizeConfetti);
+
+  // ---- Tap / click to drop ----
+  // Convert a pointer event to board coordinates (canvas is CSS-scaled).
+  function toBoardX(e){
+    const rect = canvas.getBoundingClientRect();
+    return (e.clientX - rect.left) * (BOARD_W / rect.width);
+  }
+  function inLaunchBand(e){
+    const rect = canvas.getBoundingClientRect();
+    const by = (e.clientY - rect.top) * (BOARD_H / rect.height);
+    return by <= firstPegY;                 // only the top boundary/funnel area
+  }
+  canvas.addEventListener("pointerdown", e=>{
+    if(gameState !== "idle") return;        // disabled while a ball is live
+    if(!inLaunchBand(e)) return;            // must tap within the top launch zone
+    launchBallAt(toBoardX(e));
+  });
+  canvas.addEventListener("pointermove", e=>{ hoverX = toBoardX(e); });
+  canvas.addEventListener("pointerleave", ()=>{ hoverX = null; });
+  canvas.classList.toggle("ready", !boardEmpty);   // idle at start → drops allowed unless all claimed
+
+  requestAnimationFrame(loop);
+}
+init();
+</script>
+</body>
+</html>
