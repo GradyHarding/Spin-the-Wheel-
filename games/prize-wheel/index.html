@@ -1105,7 +1105,48 @@ winnerModal.addEventListener('click', () => { closeWinner(); });
 winnerModal.addEventListener('touchstart', (e) => { e.preventDefault(); closeWinner(); }, { passive: false });
 
 // Drawer open/close
-document.getElementById('gearBtn').addEventListener('click', openDrawer);
+/* ---- Settings code lock (touch keypad; code 2005) ---- */
+let __settingsUnlocked = false;
+const SETTINGS_CODE = "2005";
+function requirePin(onSuccess) {
+  if (__settingsUnlocked) { onSuccess(); return; }
+  let entry = "";
+  const ov = document.createElement('div');
+  ov.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.78);font-family:'Source Sans 3',sans-serif;";
+  const panel = document.createElement('div');
+  panel.style.cssText = "background:#282a2f;border:1px solid rgba(255,255,255,.12);padding:24px;width:280px;max-width:88vw;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6);";
+  const title = document.createElement('div');
+  title.textContent = "Enter code"; title.style.cssText = "color:#fff;font-size:18px;font-weight:700;margin-bottom:12px;";
+  const dots = document.createElement('div');
+  dots.style.cssText = "color:#fff;font-size:28px;letter-spacing:10px;min-height:36px;margin-bottom:14px;font-family:monospace;";
+  const render = () => dots.textContent = entry.split('').map(()=>'•').join('') || '—';
+  render();
+  const pad = document.createElement('div');
+  pad.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px;";
+  const fail = () => { entry=""; render(); title.textContent="Wrong code — try again"; title.style.color="#F44336"; };
+  const check = () => { if (entry === SETTINGS_CODE) { __settingsUnlocked = true; ov.remove(); onSuccess(); } else fail(); };
+  ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].forEach(k => {
+    const b = document.createElement('button'); b.textContent = k; b.type = "button";
+    b.style.cssText = "padding:15px 0;font-size:19px;font-weight:700;border:0;background:#00a19a;color:#fff;cursor:pointer;";
+    if (k === "⌫" || k === "OK") b.style.background = "#3a3d44";
+    b.onclick = () => {
+      if (k === "⌫") entry = entry.slice(0,-1);
+      else if (k === "OK") return check();
+      else if (entry.length < 8) entry += k;
+      render();
+      if (entry.length === SETTINGS_CODE.length) check();
+    };
+    pad.appendChild(b);
+  });
+  const cancel = document.createElement('button');
+  cancel.textContent = "Cancel"; cancel.type = "button";
+  cancel.style.cssText = "margin-top:14px;background:none;border:0;color:#9fb0c7;font-size:14px;cursor:pointer;";
+  cancel.onclick = () => ov.remove();
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+  panel.append(title, dots, pad, cancel); ov.appendChild(panel); document.body.appendChild(ov);
+}
+
+document.getElementById('gearBtn').addEventListener('click', () => requirePin(openDrawer));
 document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
 backdrop.addEventListener('click', closeDrawer);
 
