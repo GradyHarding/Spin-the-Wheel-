@@ -1066,7 +1066,10 @@ function requirePin(onSuccess){
   panel.append(title, dots, pad, cancel); ov.appendChild(panel); document.body.appendChild(ov);
 }
 
-document.getElementById("gear").onclick      = ()=> requirePin(()=> admin.classList.add("open"));
+document.getElementById("gear").onclick      = ()=> {
+  if(admin.classList.contains("open")) admin.classList.remove("open");   // tap gear again to close (no code needed)
+  else requirePin(()=> admin.classList.add("open"));                     // code required to open
+};
 document.getElementById("adminClose").onclick= ()=> admin.classList.remove("open");
 
 /* Read a File input, downscaling + compressing it so it fits in localStorage.
