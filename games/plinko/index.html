@@ -312,7 +312,9 @@
       </div>
 
       <div class="section">
-        <button class="btn secondary" id="resetAll">Reset all settings</button>
+        <button class="btn" id="exportConfig" style="width:100%;padding:11px;border:none;border-radius:10px;cursor:pointer">⬇ Export settings (config.json)</button>
+        <p class="hint">Downloads a settings file. Upload it into this game's folder in your repo so everyone who opens the link sees this exact setup.</p>
+        <button class="btn secondary" id="resetAll" style="margin-top:10px">Reset all settings</button>
       </div>
 
     </div>
@@ -399,28 +401,34 @@ function defaultConfig(){
   };
 }
 
+// Fill in any missing/older fields on a config object.
+function normalizeConfig(c){
+  if(!(c && Array.isArray(c.slots) && c.slots.length>=2)) return null;
+  c.theme = Object.assign({ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63", blend:true }, c.theme||{});
+  c.ball  = Object.assign({ radius:15, color:"#ffd93d", image:"" }, c.ball||{});
+  c.slots.forEach((s,i)=>{
+    if(s.inventory == null) s.inventory = 5;
+    if(!s.color) s.color = SLOT_PALETTE[i % SLOT_PALETTE.length];
+    delete s.percent;
+  });
+  return c;
+}
+
+const hadLocalConfig = (()=>{ try{ return !!localStorage.getItem(STORE_KEY); }catch(e){ return false; } })();
+
 function loadConfig(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
     if(raw){
-      const c = JSON.parse(raw);
-      if(c && Array.isArray(c.slots) && c.slots.length>=2){
-        // Normalize older saved configs (pre-ball-customization / pre-inventory).
-        c.theme = Object.assign({ type:"color", color:"#0f1024", image:"", frameColor:"#ff2e63", blend:true }, c.theme||{});
-        c.ball  = Object.assign({ radius:15, color:"#ffd93d", image:"" }, c.ball||{});
-        c.slots.forEach((s,i)=>{                    // ensure every slot has inventory + a color
-          if(s.inventory == null) s.inventory = 5;
-          if(!s.color) s.color = SLOT_PALETTE[i % SLOT_PALETTE.length];
-          delete s.percent;                        // old weighting field is no longer used
-        });
-        return c;
-      }
+      const c = normalizeConfig(JSON.parse(raw));
+      if(c) return c;
     }
   }catch(e){ /* ignore corrupt storage */ }
   return defaultConfig();
 }
 
 function saveConfig(){
+  config.updatedAt = Date.now();   // stamp so the newest version wins across devices
   try{
     localStorage.setItem(STORE_KEY, JSON.stringify(config));
   }catch(e){
@@ -428,6 +436,36 @@ function saveConfig(){
     console.warn("Could not persist config:", e);
     alert("Settings are active for this session, but couldn't be saved permanently — the uploaded images are too large for local storage.");
   }
+}
+
+/* ---- Shared publish (config.json committed to the repo) ----
+   Fetch the published config.json; whichever of (published, local draft) has the
+   newer updatedAt wins, so every visitor sees the latest published setup. */
+async function loadPublishedConfig(){
+  let published = null;
+  try{
+    const res = await fetch('config.json', { cache:'no-store' });
+    if(res.ok) published = normalizeConfig(await res.json());
+  }catch(e){ /* no published file / offline */ }
+  if(!published) return;
+  const localTs = hadLocalConfig ? (config.updatedAt || 0) : -1;   // no local draft → published wins
+  if((published.updatedAt || 0) >= localTs){
+    config = published;
+    buildBoard(); renderSlotEditor(); syncThemeControls(); applyTheme(); syncBallControls();
+    musicVol.value = config.volume;
+  }
+}
+
+// Download the current setup as config.json for the manager to commit to the repo.
+function exportConfigFile(){
+  config.updatedAt = Date.now();
+  saveConfig();
+  const blob = new Blob([JSON.stringify(config)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'config.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
 }
 
 /* Return (and cache) an Image object for a data URL, or null. */
@@ -1216,6 +1254,9 @@ musicVol.addEventListener("input", ()=>{
   saveConfig();
 });
 
+/* ---------- Export settings for publishing ---------- */
+document.getElementById("exportConfig").addEventListener("click", exportConfigFile);
+
 /* ---------- Reset ---------- */
 document.getElementById("resetAll").addEventListener("click", ()=>{
   if(!confirm("Reset all slots, theme and settings to defaults?")) return;
@@ -1300,6 +1341,7 @@ function init(){
   canvas.classList.toggle("ready", !boardEmpty);   // idle at start → drops allowed unless all claimed
 
   requestAnimationFrame(loop);
+  loadPublishedConfig();   // adopt the repo's published config.json if it's newer
 }
 init();
 </script>

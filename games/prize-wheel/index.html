@@ -287,7 +287,9 @@
         <div id="segmentList" class="space-y-4"></div>
       </section>
 
-      <div class="pt-2">
+      <div class="pt-2 space-y-2">
+        <button id="exportConfig" class="w-full bg-brand hover:bg-brandDark text-white font-ui font-semibold py-2 sharp">⬇ Export settings (config.json)</button>
+        <p class="font-ui text-xs text-white/50">Downloads a settings file. Upload it to your repo (in this game's folder) so everyone who opens the link sees this exact setup.</p>
         <button id="resetData" class="w-full bg-kioskPanel border border-kremRed text-kremRed font-ui font-semibold py-2 sharp">Reset to defaults</button>
       </div>
     </div>
@@ -357,6 +359,7 @@ function getImg(src) {
 }
 
 /* ---------------------------- Persistence ---------------------------- */
+const hadLocalConfig = (() => { try { return !!localStorage.getItem(STORAGE_KEY); } catch (e) { return false; } })();
 function loadConfig() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -368,7 +371,43 @@ function loadConfig() {
   return structuredClone(DEFAULT_CONFIG);
 }
 function saveConfig() {
+  config.updatedAt = Date.now();   // stamp so the newest version wins across devices
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
+}
+
+/* ---- Shared publish (config.json committed to the repo) ----
+   On load we fetch the published config.json; whichever of (published, local draft)
+   has the newer updatedAt wins, so every visitor sees the latest published setup. */
+async function loadPublishedConfig() {
+  let published = null;
+  try {
+    const res = await fetch('config.json', { cache: 'no-store' });
+    if (res.ok) published = await res.json();
+  } catch (e) { /* no published file / offline — fall back to local or defaults */ }
+  if (!published) return;
+  const localTs = hadLocalConfig ? (config.updatedAt || 0) : -1;   // no local draft → published always wins
+  if ((published.updatedAt || 0) >= localTs) {
+    config = Object.assign(structuredClone(DEFAULT_CONFIG), published);
+    nextId = Math.max(0, ...config.segments.map(s => s.id)) + 1;
+    applyGlobals();
+    syncGlobalInputs();
+    renderSegmentList();
+    drawWheel();
+    sizeCanvas();
+    updatePoolNote();
+  }
+}
+
+// Download the current setup as config.json for the manager to commit to the repo.
+function exportConfigFile() {
+  config.updatedAt = Date.now();
+  saveConfig();
+  const blob = new Blob([JSON.stringify(config)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'config.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /* Downscale + compress an uploaded image so it fits in localStorage.
@@ -1162,6 +1201,9 @@ document.getElementById('addSegment').addEventListener('click', () => {
   renderSegmentList(); drawWheel(); updatePoolNote(); saveConfig();
 });
 
+// Export settings to a config.json file for publishing to the repo
+document.getElementById('exportConfig').addEventListener('click', exportConfigFile);
+
 // Reset
 document.getElementById('resetData').addEventListener('click', () => {
   config = structuredClone(DEFAULT_CONFIG);
@@ -1242,6 +1284,7 @@ if (document.fonts && document.fonts.ready) {
 window.addEventListener('load', () => { sizeCanvas(); updatePoolNote(); });
 sizeCanvas();
 updatePoolNote();
+loadPublishedConfig();   // adopt the repo's published config.json if it's newer
 </script>
 </body>
 </html>
