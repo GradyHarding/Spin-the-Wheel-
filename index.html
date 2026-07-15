@@ -451,6 +451,9 @@ input[type="color"].hub-color {
 
   <div id="loader"><div class="spinner"></div>Loading game…</div>
 
+  <!-- Idle screensaver / attract overlay -->
+  <div id="screensaver" style="position:fixed;inset:0;z-index:90;display:none;background:#000 center/cover no-repeat;cursor:pointer;"></div>
+
   <div id="exit-bar">
     <button class="exit-btn" id="exit-btn" type="button" aria-label="Return to hub" title="Return to hub">
       <span class="exit-btn__icon">
@@ -508,6 +511,21 @@ input[type="color"].hub-color {
         </div>
       </div>
 
+      <div class="hub-section-title">Screensaver</div>
+      <div class="hub-field">
+        <span>Screensaver image <span style="color:var(--text-secondary)">(shown full-screen after the device is idle)</span></span>
+        <input id="cfg-ss-image" type="text" placeholder="Image URL…" />
+        <input id="cfg-ss-file" type="file" accept="image/*" class="hub-file" />
+        <div class="hub-row" id="cfg-ss-preview-wrap" style="display:none; margin-top:6px">
+          <img id="cfg-ss-preview" class="hub-thumb-preview" alt="" />
+          <button id="cfg-ss-clear" class="hub-btn-sm hub-btn-danger" type="button">Remove image</button>
+        </div>
+      </div>
+      <label class="hub-field">
+        <span>Show it after this many minutes idle</span>
+        <input id="cfg-ss-minutes" type="number" min="1" step="1" />
+      </label>
+
       <div class="hub-section-title">Games</div>
       <div id="cfg-games"></div>
 
@@ -543,6 +561,8 @@ input[type="color"].hub-color {
     bgType: "color",     // 'color' | 'image'
     bgColor: "",         // '' = use stylesheet default (--bg-app)
     bgImage: "",
+    screensaverImg: "",  // optional attract image shown after idle
+    idleSeconds: 180,    // idle time before the screensaver appears (default 3 min)
     games: {}            // id -> { title, description, accent, image }
   };
   const hadLocalHub = (function(){ try { return !!localStorage.getItem(HUB_STORE); } catch (e) { return false; } })();
@@ -654,7 +674,7 @@ input[type="color"].hub-color {
     /* ---- Launcher (iframe) ---------------------------------------------- */
     function launchGame(game) {
       body.classList.add("game-loading");
-      viewport.onload = function () { body.classList.remove("game-loading"); };
+      viewport.onload = function () { body.classList.remove("game-loading"); attachIframeIdle(); };
       viewport.src = game.path;
       body.classList.add("game-active");
       scheduleControlsHide();
@@ -745,8 +765,16 @@ input[type="color"].hub-color {
       document.getElementById("cfg-accent").value = hubCfg.accent || "#1e6fff";
       document.getElementById("cfg-bgcolor").value = hubCfg.bgColor || "#0e1420";
       document.getElementById("cfg-bgimage").value = (hubCfg.bgImage && hubCfg.bgImage.indexOf("data:") === 0) ? "" : (hubCfg.bgImage || "");
+      document.getElementById("cfg-ss-image").value = (hubCfg.screensaverImg && hubCfg.screensaverImg.indexOf("data:") === 0) ? "" : (hubCfg.screensaverImg || "");
+      document.getElementById("cfg-ss-minutes").value = Math.round((hubCfg.idleSeconds || 180) / 60);
       setBgTypeUI(hubCfg.bgType || "color");
       syncBgPreview();
+      syncSsPreview();
+    }
+    function syncSsPreview() {
+      const w = document.getElementById("cfg-ss-preview-wrap"), img = document.getElementById("cfg-ss-preview");
+      if (hubCfg.screensaverImg) { img.src = hubCfg.screensaverImg; w.style.display = ""; }
+      else { w.style.display = "none"; img.removeAttribute("src"); }
     }
 
     // ---- Global handlers ----
@@ -767,6 +795,21 @@ input[type="color"].hub-color {
       hubCfg.bgImage = ""; document.getElementById("cfg-bgimage").value = ""; document.getElementById("cfg-bgimage-file").value = "";
       applyHub(); syncBgPreview(); hubSave();
     });
+
+    // ---- Screensaver controls ----
+    document.getElementById("cfg-ss-image").addEventListener("input", function (e) { hubCfg.screensaverImg = e.target.value.trim(); syncSsPreview(); hubSave(); });
+    document.getElementById("cfg-ss-file").addEventListener("change", function (e) {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      processImage(f, 1600, function (dataUrl) { hubCfg.screensaverImg = dataUrl; document.getElementById("cfg-ss-image").value = ""; syncSsPreview(); hubSave(); });
+    });
+    document.getElementById("cfg-ss-clear").addEventListener("click", function () {
+      hubCfg.screensaverImg = ""; document.getElementById("cfg-ss-image").value = ""; document.getElementById("cfg-ss-file").value = "";
+      syncSsPreview(); hubSave();
+    });
+    document.getElementById("cfg-ss-minutes").addEventListener("input", function (e) {
+      const m = Math.max(1, parseInt(e.target.value) || 3); hubCfg.idleSeconds = m * 60; hubSave(); resetIdle();
+    });
+
     document.getElementById("cfg-export").addEventListener("click", exportHubConfig);
     document.getElementById("cfg-reset-all").addEventListener("click", function () {
       hubCfg = structuredClone(HUB_DEFAULTS); hubSave(); syncGlobal(); renderGameEditors(); applyHub(); renderGrid();
@@ -837,10 +880,40 @@ input[type="color"].hub-color {
       }
     }
 
+    /* ---- Idle screensaver / attract overlay ---- */
+    const screensaver = document.getElementById("screensaver");
+    let idleTimer = null;
+    function showScreensaver() {
+      if (!hubCfg.screensaverImg) return;                       // opt-in: no image → never shows
+      if (document.querySelector('div[style*="99999"]')) return; // don't cover the code keypad
+      screensaver.style.backgroundImage = 'url("' + hubCfg.screensaverImg + '")';
+      screensaver.style.display = "block";
+    }
+    function resetIdle() {
+      if (screensaver.style.display === "block") screensaver.style.display = "none";
+      clearTimeout(idleTimer);
+      const secs = Math.max(10, hubCfg.idleSeconds || 180);
+      idleTimer = setTimeout(showScreensaver, secs * 1000);
+    }
+    ["pointerdown", "pointermove", "keydown", "touchstart", "wheel"].forEach(function (evt) {
+      document.addEventListener(evt, resetIdle, { passive: true });
+    });
+    screensaver.addEventListener("pointerdown", function (e) { e.stopPropagation(); resetIdle(); });
+    // Also treat activity inside a running game (same-origin iframe) as "not idle".
+    function attachIframeIdle() {
+      try {
+        const doc = viewport.contentDocument;
+        if (doc) ["pointerdown", "keydown", "touchstart"].forEach(function (evt) {
+          doc.addEventListener(evt, resetIdle, { passive: true });
+        });
+      } catch (e) { /* cross-origin (shouldn't happen) — ignore */ }
+    }
+
     applyHub();
     renderGrid();
     bootFromHash();
     loadPublishedHub();
+    resetIdle();   // start the idle countdown
   })();
   </script>
 </body>
