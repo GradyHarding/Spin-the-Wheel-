@@ -511,6 +511,10 @@ input[type="color"].hub-color {
       <div class="hub-section-title">Games</div>
       <div id="cfg-games"></div>
 
+      <div class="hub-field">
+        <button id="cfg-export" class="hub-bgtype-btn" type="button" style="background:var(--color-primary);color:#fff;border-color:var(--color-primary)">⬇ Export settings (config.json)</button>
+        <span style="font-size:var(--font-size-sm);color:var(--text-secondary)">Downloads a settings file. Upload it to your repo (next to the hub's index.html) so everyone who opens the link sees this setup.</span>
+      </div>
       <button id="cfg-reset-all" class="hub-btn-sm hub-btn-danger" type="button">Reset all hub settings</button>
     </div>
   </aside>
@@ -541,12 +545,25 @@ input[type="color"].hub-color {
     bgImage: "",
     games: {}            // id -> { title, description, accent, image }
   };
+  const hadLocalHub = (function(){ try { return !!localStorage.getItem(HUB_STORE); } catch (e) { return false; } })();
   function hubLoad() {
     try { const r = localStorage.getItem(HUB_STORE); if (r) return Object.assign(structuredClone(HUB_DEFAULTS), JSON.parse(r)); } catch (e) {}
     return structuredClone(HUB_DEFAULTS);
   }
   let hubCfg = hubLoad();
-  function hubSave() { try { localStorage.setItem(HUB_STORE, JSON.stringify(hubCfg)); } catch (e) {} }
+  function hubSave() {
+    hubCfg.updatedAt = Date.now();   // stamp so the newest version wins across devices
+    try { localStorage.setItem(HUB_STORE, JSON.stringify(hubCfg)); } catch (e) {}
+  }
+  // Download the current hub setup as config.json for the manager to commit to the repo.
+  function exportHubConfig() {
+    hubCfg.updatedAt = Date.now(); hubSave();
+    const blob = new Blob([JSON.stringify(hubCfg)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "config.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  }
   // effective value: per-game override if present, else registry default
   function gval(game, field) { const o = hubCfg.games[game.id] || {}; return (o[field] !== undefined && o[field] !== "") ? o[field] : game[field]; }
   function gimg(game) { const o = hubCfg.games[game.id] || {}; return o.image || ""; }
@@ -710,6 +727,7 @@ input[type="color"].hub-color {
       hubCfg.bgImage = ""; document.getElementById("cfg-bgimage").value = ""; document.getElementById("cfg-bgimage-file").value = "";
       applyHub(); syncBgPreview(); hubSave();
     });
+    document.getElementById("cfg-export").addEventListener("click", exportHubConfig);
     document.getElementById("cfg-reset-all").addEventListener("click", function () {
       hubCfg = structuredClone(HUB_DEFAULTS); hubSave(); syncGlobal(); renderGameEditors(); applyHub(); renderGrid();
     });
@@ -764,9 +782,25 @@ input[type="color"].hub-color {
       if (match) launchGame(match);
     }
 
+    /* ---- Shared publish: adopt the repo's config.json if it's newer ---- */
+    async function loadPublishedHub() {
+      let published = null;
+      try {
+        const res = await fetch("config.json", { cache: "no-store" });
+        if (res.ok) published = await res.json();
+      } catch (e) { /* no published file / offline */ }
+      if (!published) return;
+      const localTs = hadLocalHub ? (hubCfg.updatedAt || 0) : -1;   // no local draft → published wins
+      if ((published.updatedAt || 0) >= localTs) {
+        hubCfg = Object.assign(structuredClone(HUB_DEFAULTS), published);
+        applyHub(); renderGrid();
+      }
+    }
+
     applyHub();
     renderGrid();
     bootFromHash();
+    loadPublishedHub();
   })();
   </script>
 </body>
