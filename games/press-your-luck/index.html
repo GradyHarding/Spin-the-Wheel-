@@ -427,9 +427,17 @@ function compressImage(file, maxEdge){
         const scale = Math.min(1, maxEdge/Math.max(w,h));
         w=Math.round(w*scale); h=Math.round(h*scale);
         const c=el("canvas"); c.width=w; c.height=h;
-        c.getContext("2d").drawImage(img,0,0,w,h);
-        const png=c.toDataURL("image/png"), jpeg=c.toDataURL("image/jpeg",0.85);
-        resolve(png.length<=jpeg.length?png:jpeg);
+        const cx=c.getContext("2d"); cx.drawImage(img,0,0,w,h);
+        // If the image has any transparency we MUST keep PNG — exporting to JPEG
+        // has no alpha channel and flattens transparent pixels to black, which is
+        // what put an ugly black box behind transparent icons.
+        let hasAlpha=false;
+        try{ const d=cx.getImageData(0,0,w,h).data; for(let i=3;i<d.length;i+=4){ if(d[i]<250){ hasAlpha=true; break; } } }
+        catch(e){ hasAlpha=true; }   // if we can't inspect the pixels, play it safe and keep PNG
+        const png=c.toDataURL("image/png");
+        if(hasAlpha){ resolve(png); return; }
+        const jpeg=c.toDataURL("image/jpeg",0.85);
+        resolve(png.length<=jpeg.length?png:jpeg);   // opaque image -> keep the smaller file
       };
       img.src = reader.result;
     };
