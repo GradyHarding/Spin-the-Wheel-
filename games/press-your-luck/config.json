@@ -1,0 +1,58 @@
+{
+  "updatedAt": 1784217570000,
+  "title": "PRESS YOUR LUCK",
+  "accent": "#22d3ee",
+  "bgMode": "color",
+  "bgColor": "#160a2e",
+  "bgImage": "",
+  "whammyProb": 0.18,
+  "prizes": [
+    {
+      "id": "p1",
+      "name": "Gaming Console",
+      "inventory": 5,
+      "color": "#f472b6",
+      "icon": "🎮",
+      "thumb": "",
+      "winnerImg": ""
+    },
+    {
+      "id": "p2",
+      "name": "Weekend Trip",
+      "inventory": 3,
+      "color": "#38bdf8",
+      "icon": "✈️",
+      "thumb": "",
+      "winnerImg": ""
+    },
+    {
+      "id": "p3",
+      "name": "$100 Gift Card",
+      "inventory": 10,
+      "color": "#a3e635",
+      "icon": "💳",
+      "thumb": "",
+      "winnerImg": ""
+    }
+  ],
+  "layout": [
+    { "type": "prize", "prizeId": "p3" },
+    { "type": "whammy" },
+    { "type": "prize", "prizeId": "p1" },
+    { "type": "prize", "prizeId": "p2" },
+    { "type": "prize", "prizeId": "p3" },
+    { "type": "prize", "prizeId": "p1" },
+    { "type": "whammy" },
+    { "type": "prize", "prizeId": "p3" },
+    { "type": "prize", "prizeId": "p2" },
+    { "type": "prize", "prizeId": "p1" },
+    { "type": "prize", "prizeId": "p3" },
+    { "type": "whammy" },
+    { "type": "prize", "prizeId": "p3" },
+    { "type": "prize", "prizeId": "p1" },
+    { "type": "prize", "prizeId": "p2" },
+    { "type": "prize", "prizeId": "p3" },
+    { "type": "prize", "prizeId": "p1" },
+    { "type": "whammy" }
+  ]
+}

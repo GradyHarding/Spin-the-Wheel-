@@ -1,0 +1,887 @@
+<!--
+  ============================================================================
+  PRESS YOUR LUCK  —  LVT Kiosk Game  (PRIZE EDITION)
+  ----------------------------------------------------------------------------
+  Single self-contained file. No external/runtime dependencies so it runs
+  offline and on GitHub Pages, per the LVT Kiosk Game Standard.
+
+  GAME MODEL (pure prize kiosk — matches the Wheel / Plinko drop)
+  ---------------------------------------------------------------
+  - No cash Bank, no Lives. One spin = one result.
+  - Every one of the 18 board squares is EITHER a physical prize OR a Whammy.
+    Each square is individually editable in the admin (tap a square, pick what
+    goes there), just like the prize spaces on the Plinko drop.
+  - Odds are PER-SQUARE (Plinko-style): the Whammy % (admin slider) is the total
+    chance of any whammy; the remaining probability splits evenly across the
+    live prize squares — so a prize on more squares wins more often.
+  - Prizes use the shared LVT model: name, inventory, color, board icon,
+    winner pop-up image, relative weight. Inventory decrements the instant a
+    prize is won; a depleted prize is pulled from play ("SOLD OUT") and the odds
+    redistribute across whatever is left, always summing to 100%.
+
+  Config key:  lvt_press-your-luck_v1
+  ============================================================================
+-->
+<meta charset="utf-8">
+<!-- Kiosk hardening (Standard B): lock zoom + fit notches -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Press Your Luck</title>
+
+<style>
+  /* ===================== DESIGN TOKENS ===================== */
+  :root{
+    --accent:#22d3ee;                /* cyan (admin-editable)            */
+    --neon:#fde047;                  /* neon yellow                      */
+    --bg:#160a2e;                    /* deep dark purple (admin-editable)*/
+    --bg2:#0c0620;
+    --panel:#241247;
+    --panel2:#170a33;
+    --line:#3a1f6e;
+    --text:#f4ecff;
+    --danger:#ef2b4b;
+    --tile-radius:12px;
+  }
+
+  /* ===================== KIOSK RESET (Standard B) ===================== */
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{
+    height:100%;margin:0;overflow:hidden;overscroll-behavior:none;
+    background:var(--bg2);color:var(--text);
+    font-family:"Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    touch-action:manipulation;
+  }
+  body{touch-action:none}
+  button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:none}
+  img{max-width:100%}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+  #stage{
+    position:fixed;inset:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 90% at 50% -10%, rgba(255,255,255,.06), transparent 60%), var(--bg);
+    background-size:cover;background-position:center;
+  }
+
+  /* ===================== HEADER ===================== */
+  header{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding:clamp(6px,1.4vh,16px) 56px;position:relative}
+  #title{margin:0;text-align:center;line-height:1;font-size:clamp(20px,4.6vmin,44px);font-weight:900;letter-spacing:.06em;color:var(--neon);text-shadow:0 0 14px rgba(253,224,71,.55),0 3px 0 rgba(0,0,0,.35);text-transform:uppercase}
+  #gearBtn{position:absolute;top:50%;right:12px;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);opacity:.85;transition:transform .2s}
+  #gearBtn:active{transform:translateY(-50%) scale(.9)}
+
+  /* ===================== BOARD ===================== */
+  #boardWrap{flex:1 1 auto;display:grid;place-items:center;min-height:0;padding:4px}
+  #board{
+    width:min(96vw, 118dvh, 1040px);aspect-ratio:6/5;display:grid;
+    grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(5,1fr);
+    gap:clamp(4px,1vmin,12px);padding:clamp(4px,1vmin,12px);border-radius:22px;
+    background:linear-gradient(160deg,#2a1358,#140830);
+    box-shadow:0 0 0 2px var(--line),0 24px 60px rgba(0,0,0,.55),inset 0 0 40px rgba(0,0,0,.4);
+  }
+  @supports not (height:1dvh){ #board{width:min(96vw,118vh,1040px)} }
+
+  .tile{
+    position:relative;border-radius:var(--tile-radius);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;line-height:1.05;font-weight:900;color:#fff;padding:2px;overflow:hidden;
+    box-shadow:inset 0 0 0 2px rgba(0,0,0,.25),0 4px 0 rgba(0,0,0,.35);
+    transition:transform .08s ease;container-type:size;text-shadow:0 1px 3px rgba(0,0,0,.55);
+  }
+  .tile .lbl{font-size:clamp(8px,3cqmin,15px);letter-spacing:.02em;text-transform:uppercase;font-weight:800}
+  .tile .thumb{width:46%;height:46%;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+  .tile .pico{font-size:clamp(18px,8cqmin,44px);line-height:1}
+  .t-whammy{background:linear-gradient(160deg,#ff5470,#c1122e)}
+  .t-soldout{filter:grayscale(1) brightness(.55)}
+  .t-soldout .sold{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(8px,3.4cqmin,15px);letter-spacing:.08em;background:rgba(0,0,0,.45);color:#fff;transform:rotate(-8deg)}
+  .whammyFace{width:54%;height:54%}
+
+  .tile.lit{transform:scale(1.06);box-shadow:0 0 0 3px #fff,0 0 26px 8px var(--neon),inset 0 0 0 2px rgba(255,255,255,.6);z-index:5;filter:brightness(1.28) saturate(1.2)}
+  .tile.win{animation:tileWin .5s ease infinite alternate}
+  @keyframes tileWin{from{box-shadow:0 0 0 3px #fff,0 0 22px 6px var(--neon)}to{box-shadow:0 0 0 5px var(--neon),0 0 40px 16px #fff;transform:scale(1.12)}}
+
+  /* ===================== CENTRE CONSOLE ===================== */
+  #console{
+    grid-column:2 / 6;grid-row:2 / 5;border-radius:16px;
+    background:radial-gradient(120% 120% at 50% 0%, #2b1560, #100626 80%);
+    box-shadow:inset 0 0 0 2px var(--line),inset 0 0 40px rgba(0,0,0,.55);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:clamp(8px,2vmin,20px);padding:clamp(10px,2.4vmin,26px);text-align:center;
+  }
+  #bigIcon{font-size:clamp(30px,9vmin,64px);line-height:1;filter:drop-shadow(0 0 18px rgba(253,224,71,.45))}
+  #status{font-size:clamp(17px,4.4vmin,36px);font-weight:900;letter-spacing:.02em;text-transform:uppercase;min-height:1.2em;text-shadow:0 0 12px rgba(34,211,238,.4)}
+  #subStatus{font-size:clamp(11px,2.2vmin,17px);opacity:.82;font-weight:700;min-height:1em}
+  #actions{display:flex;gap:clamp(8px,2vmin,18px);flex-wrap:wrap;justify-content:center;width:100%}
+  .btn{font-weight:900;text-transform:uppercase;letter-spacing:.04em;border-radius:14px;padding:clamp(12px,2.8vmin,20px) clamp(16px,4vmin,36px);font-size:clamp(14px,3.4vmin,24px);box-shadow:0 5px 0 rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.4);transition:transform .08s,filter .2s;color:#12061f}
+  .btn:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.4)}
+  .btn-spin{background:linear-gradient(160deg,#fde047,#f59e0b);min-width:clamp(150px,44vmin,280px)}
+  .btn-stop{background:linear-gradient(160deg,#ff5470,#c1122e);color:#fff;min-width:clamp(150px,44vmin,280px);animation:pulse .7s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+
+  .shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97) both}
+  @keyframes shake{10%,90%{transform:translate(-2px,0)}20%,80%{transform:translate(4px,0)}30%,50%,70%{transform:translate(-8px,0)}40%,60%{transform:translate(8px,0)}}
+  .bounce{animation:bounce .45s ease}
+  @keyframes bounce{0%{transform:scale(.7)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+
+  /* ===================== OVERLAYS ===================== */
+  .overlay{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:24px;background:rgba(5,2,16,.82);backdrop-filter:blur(3px)}
+  .overlay.show{display:flex}
+
+  #whammyOverlay{background:rgba(90,0,15,.72)}
+  #whammyOverlay .big{font-size:clamp(40px,14vmin,150px);font-weight:900;color:#fff;text-shadow:0 0 30px #ff2b4b,0 0 10px #000;letter-spacing:.04em;animation:bounce .5s ease}
+  #whammyOverlay .sub{font-size:clamp(14px,3vmin,24px);margin-top:8px;color:#ffd9df;font-weight:800}
+  #whammyOverlay svg{width:clamp(90px,26vmin,220px);height:clamp(90px,26vmin,220px);margin-bottom:6px}
+
+  /* Winner pop-up (Standard E) — image fills screen, tap to dismiss */
+  #winnerOverlay{background:rgba(5,2,16,.92);z-index:50}
+  #winnerImg{width:100vw;height:100dvh;object-fit:contain;display:none}
+  #winnerText{display:none;flex-direction:column;align-items:center;gap:10px}
+  #winnerText .wname{font-size:clamp(30px,10vmin,90px);font-weight:900;color:var(--neon);text-shadow:0 0 24px rgba(253,224,71,.6)}
+  #winnerText .wtag{font-size:clamp(16px,3.4vmin,26px);color:var(--accent);font-weight:800;letter-spacing:.1em}
+  .dismissHint{position:fixed;bottom:18px;left:0;right:0;text-align:center;font-size:14px;opacity:.7;font-weight:700;letter-spacing:.08em}
+
+  #confetti{position:fixed;inset:0;z-index:60;pointer-events:none;display:none}
+  #confetti.show{display:block}
+
+  /* ===================== ADMIN (Standard C/F) ===================== */
+  #adminBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:70;display:none}
+  #adminBackdrop.show{display:block}
+  #adminPanel{position:fixed;top:0;right:0;bottom:0;z-index:71;width:min(430px,94vw);background:linear-gradient(180deg,var(--panel),var(--panel2));border-left:1px solid var(--line);transform:translateX(102%);transition:transform .28s ease;display:flex;flex-direction:column;touch-action:pan-y}
+  #adminPanel.show{transform:translateX(0)}
+  #adminPanel header{justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+  #adminPanel header h2{margin:0;font-size:18px;color:var(--neon)}
+  #adminBody{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:18px;-webkit-overflow-scrolling:touch}
+  .fieldset{background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .fieldset > .h{font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-bottom:10px;font-weight:800}
+  .fieldset > .hint{font-size:11px;opacity:.55;margin:-6px 0 10px;font-weight:600}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}
+  .row label{font-size:13px;font-weight:700}
+  .row .val{font-size:13px;font-weight:900;color:var(--accent);min-width:52px;text-align:right}
+  input[type=text],input[type=number]{background:#0d0522;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font-size:14px;width:100%}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  input[type=color]{width:44px;height:32px;border:1px solid var(--line);border-radius:8px;background:none;padding:0}
+  .seg{display:flex;background:#0d0522;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{padding:7px 12px;font-size:12px;font-weight:800;color:var(--text);opacity:.6}
+  .seg button.active{background:var(--accent);color:#08131a;opacity:1}
+  .miniBtn{background:var(--accent);color:#08131a;font-weight:800;border-radius:8px;padding:8px 12px;font-size:13px}
+  .miniBtn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .miniBtn.danger{background:var(--danger);color:#fff}
+  .prizeCard{background:#0d0522;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+  .prizeCard .pc-top{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .prizeCard .pc-sw{width:24px;height:24px;border-radius:6px;flex:0 0 auto;border:1px solid rgba(255,255,255,.2)}
+  .prizeCard .pc-name{flex:1;font-weight:800}
+  .imgSlot{display:flex;gap:8px;align-items:center;margin:6px 0;font-size:12px}
+  .imgSlot .prev{width:40px;height:40px;border-radius:6px;background:#160a2e;object-fit:contain;border:1px solid var(--line)}
+  .fileLbl{background:var(--accent);color:#08131a;font-weight:800;border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer}
+  .fileLbl input{display:none}
+  .fullBtn{width:100%;padding:12px;border-radius:10px;font-weight:900;font-size:14px}
+
+  /* Board editor mini-board */
+  #miniBoard{display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(5,1fr);gap:4px;aspect-ratio:6/5}
+  .mini{border-radius:7px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;font-weight:800;color:#fff;padding:2px;overflow:hidden;line-height:1.02;text-shadow:0 1px 2px rgba(0,0,0,.6);box-shadow:inset 0 0 0 1px rgba(0,0,0,.3);cursor:pointer;container-type:size}
+  .mini.center{grid-column:2/6;grid-row:2/5;background:rgba(0,0,0,.3);color:var(--text);opacity:.7;font-size:11px;cursor:default;text-shadow:none;box-shadow:none}
+  .mini .mlbl{font-size:clamp(6px,18cqmin,11px)}
+  .mini .mico{font-size:clamp(11px,40cqmin,22px)}
+  .mini.whammy{background:linear-gradient(160deg,#ff5470,#c1122e)}
+  .mini.soldout{filter:grayscale(1) brightness(.6)}
+
+  /* Square picker */
+  #squarePicker{position:fixed;inset:0;z-index:82;background:rgba(4,2,14,.85);display:none;align-items:center;justify-content:center;padding:20px}
+  #squarePicker.show{display:flex}
+  .pickBox{background:linear-gradient(160deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:16px;width:min(360px,92vw);max-height:80vh;overflow-y:auto}
+  .pickBox h3{margin:0 0 4px;color:var(--neon);font-size:16px}
+  .pickBox .psub{font-size:12px;opacity:.6;margin-bottom:12px}
+  .pickOpt{display:flex;align-items:center;gap:10px;width:100%;background:#0d0522;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-weight:800;font-size:14px;text-align:left;color:var(--text)}
+  .pickOpt .sw{width:22px;height:22px;border-radius:6px;flex:0 0 auto;display:grid;place-items:center;font-size:13px}
+  .pickOpt .meta{margin-left:auto;font-size:11px;opacity:.6;font-weight:700}
+  .pickOpt.sel{outline:2px solid var(--accent)}
+
+  /* PIN keypad (code 2005) */
+  #pinOverlay{position:fixed;inset:0;z-index:80;background:rgba(4,2,14,.9);display:none;align-items:center;justify-content:center}
+  #pinOverlay.show{display:flex}
+  .pinBox{background:linear-gradient(160deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:18px;padding:22px;width:min(320px,90vw);text-align:center}
+  .pinBox h3{margin:0 0 4px;color:var(--neon)}
+  .pinBox .dots{display:flex;gap:12px;justify-content:center;margin:16px 0}
+  .pinBox .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--accent)}
+  .pinBox .dot.on{background:var(--accent)}
+  .pinBox.err{animation:shake .4s}
+  .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .keys button{background:#0d0522;border:1px solid var(--line);border-radius:12px;padding:16px 0;font-size:22px;font-weight:800}
+  .keys button:active{background:var(--accent);color:#08131a}
+
+  @media (prefers-reduced-motion: reduce){ .shake,.bounce,.btn-stop,.tile.win{animation:none!important} }
+</style>
+
+<div id="stage">
+  <header>
+    <h1 id="title">PRESS YOUR LUCK</h1>
+    <button id="gearBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+  </header>
+
+  <div id="boardWrap">
+    <div id="board" role="group" aria-label="Press Your Luck board">
+      <div id="console">
+        <div id="bigIcon">🎯</div>
+        <div id="status">SPIN THE BOARD!</div>
+        <div id="subStatus">Land on a prize — dodge the Whammy!</div>
+        <div id="actions"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WHAMMY -->
+<div class="overlay" id="whammyOverlay" aria-live="assertive">
+  <svg viewBox="0 0 120 120">
+    <circle cx="60" cy="60" r="54" fill="#c1122e" stroke="#fff" stroke-width="4"/>
+    <path d="M28 44 L52 54 M92 44 L68 54" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="44" cy="60" r="9" fill="#fff"/><circle cx="76" cy="60" r="9" fill="#fff"/>
+    <circle cx="46" cy="62" r="4" fill="#111"/><circle cx="78" cy="62" r="4" fill="#111"/>
+    <path d="M40 88 Q60 72 80 88" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M52 92 L56 84 L60 92 L64 84 L68 92" stroke="#fff" stroke-width="4" fill="none"/>
+  </svg>
+  <div class="big">WHAMMY!</div>
+  <div class="sub">No prize this time — give it another spin!</div>
+  <div class="dismissHint">Tap anywhere to play again</div>
+</div>
+
+<!-- WINNER POP-UP -->
+<div class="overlay" id="winnerOverlay" aria-live="assertive">
+  <img id="winnerImg" alt="You won a prize">
+  <div id="winnerText"><div class="wname"></div><div class="wtag">YOU WON!</div></div>
+  <div class="dismissHint">Tap anywhere to continue</div>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<!-- ADMIN -->
+<div id="adminBackdrop"></div>
+<aside id="adminPanel" aria-label="Admin settings" aria-hidden="true">
+  <header><h2>⚙ Admin Panel</h2><button class="miniBtn ghost" id="adminClose">✕ Close</button></header>
+  <div id="adminBody">
+
+    <div class="fieldset">
+      <div class="h">Appearance</div>
+      <div class="row"><label for="cfgTitle">Headline</label></div>
+      <input type="text" id="cfgTitle" maxlength="40">
+      <div class="row"><label>Accent color</label><input type="color" id="cfgAccent"></div>
+      <div class="row"><label>Background</label>
+        <div class="seg"><button data-bg="color" id="bgColorBtn">Color</button><button data-bg="image" id="bgImageBtn">Image</button></div>
+      </div>
+      <div class="row" id="bgColorRow"><label>BG color</label><input type="color" id="cfgBgColor"></div>
+      <div class="imgSlot" id="bgImageRow">
+        <img class="prev" id="bgPrev" alt="">
+        <label class="fileLbl">Upload BG<input type="file" accept="image/*" id="bgFile"></label>
+        <button class="miniBtn ghost" id="bgClear">Clear</button>
+      </div>
+    </div>
+
+    <div class="fieldset">
+      <div class="h">Odds</div>
+      <div class="hint">Whammy % is the total chance of landing on any whammy. The rest is split evenly across the live prize squares.</div>
+      <div class="row"><label>Whammy chance</label><span class="val" id="whammyVal">18%</span></div>
+      <input type="range" id="cfgWhammy" min="0" max="40" step="1">
+    </div>
+
+    <!-- Per-square board editor (Plinko-style) -->
+    <div class="fieldset">
+      <div class="h">Board Squares</div>
+      <div class="hint">Tap any square to set it to a prize or a Whammy.</div>
+      <div id="miniBoard"></div>
+    </div>
+
+    <!-- Prize definitions CRUD (Standard D) -->
+    <div class="fieldset">
+      <div class="h">Prizes</div>
+      <div class="hint">Define prizes here, then place them on squares above.</div>
+      <div id="prizeList"></div>
+      <button class="miniBtn fullBtn" id="addPrize">+ Add prize</button>
+    </div>
+
+    <div class="fieldset">
+      <div class="h">Publish</div>
+      <button class="miniBtn fullBtn" id="exportBtn">⬇ Export settings (config.json)</button>
+      <div class="row" style="margin-top:8px"><label style="opacity:.6;font-weight:600;font-size:11px">Saved to this device automatically. Export &amp; upload config.json to publish for everyone.</label></div>
+      <button class="miniBtn ghost fullBtn" id="resetCfg" style="margin-top:8px">Reset to defaults</button>
+    </div>
+  </div>
+</aside>
+
+<!-- SQUARE PICKER -->
+<div id="squarePicker">
+  <div class="pickBox">
+    <h3 id="pickTitle">Set square</h3>
+    <div class="psub">Choose what lands on this square</div>
+    <div id="pickOpts"></div>
+    <button class="miniBtn ghost fullBtn" id="pickCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- PIN KEYPAD (code 2005) -->
+<div id="pinOverlay">
+  <div class="pinBox" id="pinBox">
+    <h3>Enter Code</h3>
+    <div style="font-size:12px;opacity:.6">Admin access</div>
+    <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+    <div class="keys">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="x">✕</button><button data-k="0">0</button><button data-k="del">⌫</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   0. CONSTANTS & DOM HELPERS
+   ========================================================================== */
+const GAME_ID = "press-your-luck";
+const LS_KEY  = "lvt_" + GAME_ID + "_v1";
+const ADMIN_CODE = "2005";
+const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const $  = (s,r=document) => r.querySelector(s);
+const el = (tag,cls) => { const n=document.createElement(tag); if(cls) n.className=cls; return n; };
+
+/* Perimeter placement (6 cols x 5 rows), clockwise from top-left -> 18 cells */
+const PERIM = [
+  [1,1],[1,2],[1,3],[1,4],[1,5],[1,6],   // top
+  [2,6],[3,6],[4,6],                       // right
+  [5,6],[5,5],[5,4],[5,3],[5,2],[5,1],     // bottom
+  [4,1],[3,1],[2,1]                        // left
+];
+
+/* ==========================================================================
+   1. CONFIG (Standard H)
+   ========================================================================== */
+function defaultLayout(){
+  // 18 squares: a mix of the 3 default prizes with a few whammies. Fully
+  // editable in the admin. prizeId falls back to a whammy if that prize is
+  // deleted, or to "SOLD OUT" when its inventory hits 0.
+  return [
+    {type:"prize",prizeId:"p3"},{type:"whammy"},{type:"prize",prizeId:"p1"},
+    {type:"prize",prizeId:"p2"},{type:"prize",prizeId:"p3"},{type:"prize",prizeId:"p1"},
+    {type:"whammy"},{type:"prize",prizeId:"p3"},{type:"prize",prizeId:"p2"},
+    {type:"prize",prizeId:"p1"},{type:"prize",prizeId:"p3"},{type:"whammy"},
+    {type:"prize",prizeId:"p3"},{type:"prize",prizeId:"p1"},{type:"prize",prizeId:"p2"},
+    {type:"prize",prizeId:"p3"},{type:"prize",prizeId:"p1"},{type:"whammy"}
+  ];
+}
+function defaultConfig(){
+  return {
+    updatedAt: 0,
+    title: "PRESS YOUR LUCK",
+    accent: "#22d3ee",
+    bgMode: "color",
+    bgColor: "#160a2e",
+    bgImage: "",
+    whammyProb: 0.18,           // total chance of any whammy square
+    prizes: [
+      { id:"p1", name:"Gaming Console", inventory:5,  color:"#f472b6", icon:"🎮", thumb:"", winnerImg:"" },
+      { id:"p2", name:"Weekend Trip",   inventory:3,  color:"#38bdf8", icon:"✈️", thumb:"", winnerImg:"" },
+      { id:"p3", name:"$100 Gift Card", inventory:10, color:"#a3e635", icon:"💳", thumb:"", winnerImg:"" }
+    ],
+    layout: defaultLayout()
+  };
+}
+let cfg = defaultConfig();
+
+function loadLocal(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
+function saveLocal(){ cfg.updatedAt = Date.now(); try{ localStorage.setItem(LS_KEY, JSON.stringify(cfg)); }catch(e){} }
+
+async function bootConfig(){
+  const local = loadLocal();
+  let published = null;
+  try{ const res = await fetch("config.json",{cache:"no-store"}); if(res.ok) published = await res.json(); }catch(e){}
+  if(published && (!local || (published.updatedAt||0) >= (local.updatedAt||0))){
+    cfg = Object.assign(defaultConfig(), published);
+  } else if(local){
+    cfg = Object.assign(defaultConfig(), local);
+  }
+  cfg.prizes = (cfg.prizes||[]).map(p=>Object.assign({inventory:0,color:"#a3e635",icon:"🎁",thumb:"",winnerImg:""},p));
+  if(!Array.isArray(cfg.layout) || cfg.layout.length!==18) cfg.layout = defaultLayout();
+}
+
+function exportConfig(){
+  saveLocal();
+  const blob = new Blob([JSON.stringify(cfg,null,2)],{type:"application/json"});
+  const a = el("a"); a.href = URL.createObjectURL(blob); a.download = "config.json";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ==========================================================================
+   2. IMAGE COMPRESSION (Standard G)
+   ========================================================================== */
+function compressImage(file, maxEdge){
+  return new Promise((resolve)=>{
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let {width:w,height:h} = img;
+        const scale = Math.min(1, maxEdge/Math.max(w,h));
+        w=Math.round(w*scale); h=Math.round(h*scale);
+        const c=el("canvas"); c.width=w; c.height=h;
+        c.getContext("2d").drawImage(img,0,0,w,h);
+        const png=c.toDataURL("image/png"), jpeg=c.toDataURL("image/jpeg",0.85);
+        resolve(png.length<=jpeg.length?png:jpeg);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ==========================================================================
+   3. AUDIO — synthesized retro beeps
+   ========================================================================== */
+let AC=null;
+function audio(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==="suspended") AC.resume(); return AC; }
+function beep(freq,dur=0.05,type="square",vol=0.08){
+  const ac=audio(); if(!ac) return;
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(vol,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+dur);
+  o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+dur);
+}
+function sfxTick(step){ beep(520+step*14,0.045,"square",0.05); }
+function sfxWhammy(){ const ac=audio(); if(!ac)return; const o=ac.createOscillator(),g=ac.createGain(); o.type="sawtooth"; o.frequency.setValueAtTime(300,ac.currentTime); o.frequency.exponentialRampToValueAtTime(60,ac.currentTime+0.6); g.gain.setValueAtTime(0.12,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.6); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+0.6); }
+function sfxFanfare(){ [523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,0.16,"triangle",0.1),i*110)); }
+
+/* ==========================================================================
+   4. GAME STATE
+   ========================================================================== */
+const S = { phase:"idle", board:[], litIndex:0, fastTimer:null };
+
+/* Resolve cfg.layout into 18 live tiles */
+function rebuildBoard(){
+  S.board = cfg.layout.map(cell=>{
+    if(cell.type==="prize"){
+      const p = cfg.prizes.find(x=>x.id===cell.prizeId);
+      if(!p) return {type:"whammy"};                 // prize was deleted
+      if(p.inventory<=0) return {type:"soldout", prize:p};
+      return {type:"prize", prize:p};
+    }
+    return {type:"whammy"};
+  });
+}
+
+/* ==========================================================================
+   5. RENDERING
+   ========================================================================== */
+const boardEl = $("#board");
+let tileEls = [];
+
+function buildTiles(){
+  tileEls.forEach(t=>t.remove()); tileEls=[];
+  for(let i=0;i<18;i++){
+    const t = el("div","tile");
+    t.dataset.index=i;
+    const [r,c]=PERIM[i]; t.style.gridRow=r; t.style.gridColumn=c;
+    t.setAttribute("role","img");
+    boardEl.appendChild(t); tileEls.push(t);
+  }
+  paintTiles();
+}
+
+function whammyFaceSVG(){
+  return '<svg class="whammyFace" viewBox="0 0 100 100" aria-hidden="true">'
+    + '<circle cx="50" cy="52" r="40" fill="#8b0d22"/>'
+    + '<circle cx="38" cy="48" r="7" fill="#fff"/><circle cx="62" cy="48" r="7" fill="#fff"/>'
+    + '<circle cx="39" cy="50" r="3" fill="#111"/><circle cx="63" cy="50" r="3" fill="#111"/>'
+    + '<path d="M24 34 L44 44 M76 34 L56 44" stroke="#fff" stroke-width="5" stroke-linecap="round"/>'
+    + '<path d="M34 74 Q50 62 66 74" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round"/>'
+    + '</svg>';
+}
+function shade(hex,amt){
+  const h=hex.replace("#",""); if(h.length!==6) return hex;
+  let r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  r=Math.max(0,Math.min(255,r+amt));g=Math.max(0,Math.min(255,g+amt));b=Math.max(0,Math.min(255,b+amt));
+  return "#"+[r,g,b].map(v=>v.toString(16).padStart(2,"0")).join("");
+}
+
+function paintTiles(){
+  S.board.forEach((tile,i)=>{
+    const node = tileEls[i];
+    node.className = "tile"; node.style.background=""; node.innerHTML="";
+    if(tile.type==="prize" || tile.type==="soldout"){
+      node.style.background = `linear-gradient(160deg, ${tile.prize.color}, ${shade(tile.prize.color,-28)})`;
+      const inner = tile.prize.thumb ? `<img class="thumb" src="${tile.prize.thumb}" alt="">`
+                                     : `<span class="pico">${tile.prize.icon||"🎁"}</span>`;
+      node.innerHTML = `${inner}<span class="lbl">${tile.prize.name}</span>`;
+      node.setAttribute("aria-label", tile.prize.name + (tile.type==="soldout"?" (sold out)":""));
+      if(tile.type==="soldout"){ node.classList.add("t-soldout"); node.insertAdjacentHTML("beforeend",'<span class="sold">SOLD OUT</span>'); }
+    } else {
+      node.classList.add("t-whammy");
+      node.innerHTML = whammyFaceSVG();
+      node.setAttribute("aria-label","Whammy");
+    }
+  });
+}
+
+function setStatus(main,sub){ $("#status").textContent=main; if(sub!==undefined) $("#subStatus").textContent=sub; }
+function setActions(list){
+  const wrap=$("#actions"); wrap.innerHTML="";
+  list.forEach(b=>{ const btn=el("button","btn "+b.cls); btn.textContent=b.label; if(b.aria) btn.setAttribute("aria-label",b.aria); bindPress(btn,b.fn); wrap.appendChild(btn); });
+}
+
+/* ==========================================================================
+   6. INPUT — touchstart-first with click fallback (Standard B)
+   ========================================================================== */
+function bindPress(node, fn){
+  let handled=0;
+  const run=(e)=>{ const now=performance.now(); if(now-handled<400) return; handled=now; audio(); e.preventDefault(); fn(e); };
+  node.addEventListener("touchstart",run,{passive:false});
+  node.addEventListener("click",run);
+}
+
+/* ==========================================================================
+   7. PER-SQUARE ODDS ENGINE (Plinko-style)
+   --------------------------------------------------------------------------
+   Whammy% (slider) = total chance of any whammy square. The remaining
+   (1 - whammy%) splits evenly across every LIVE prize square, so a prize
+   placed on more squares wins proportionally more often. Sold-out / deleted
+   prizes are not landable, so the odds automatically redistribute to 100%.
+   ========================================================================== */
+function pickTargetIndex(){
+  const whammy=[], prize=[];
+  S.board.forEach((t,i)=>{
+    if(t.type==="prize") prize.push(i);
+    else if(t.type==="whammy") whammy.push(i);
+    // soldout -> not landable
+  });
+  const wp = cfg.whammyProb;
+  const weights = []; // {i, w}
+  if(prize.length===0){                          // nothing to win -> all whammy
+    (whammy.length?whammy:S.board.map((_,i)=>i)).forEach(i=>weights.push({i,w:1}));
+  } else if(whammy.length===0){                  // no whammies placed -> pure prizes
+    prize.forEach(i=>weights.push({i,w:1}));
+  } else {                                        // honour whammy%, split the rest per prize square
+    whammy.forEach(i=>weights.push({i, w: wp/whammy.length}));
+    prize.forEach(i=>weights.push({i, w: (1-wp)/prize.length}));
+  }
+  let tot=weights.reduce((s,x)=>s+x.w,0), r=Math.random()*tot;
+  for(const x of weights){ r-=x.w; if(r<=0) return x.i; }
+  return weights[weights.length-1].i;
+}
+
+/* ==========================================================================
+   8. SPIN FLOW
+   ========================================================================== */
+function highlight(i){ tileEls.forEach(t=>t.classList.remove("lit","win")); tileEls[i].classList.add("lit"); S.litIndex=i; }
+
+function startSpin(){
+  if(S.phase!=="idle") return;
+  S.phase="spinning";
+  $("#bigIcon").textContent="🎡";
+  setStatus("SPINNING…","Hit STOP to lock it in!");
+  setActions([{label:"STOP!",cls:"btn-stop",fn:stopSpin,aria:"Stop the board"}]);
+  let step=0;
+  S.fastTimer=setInterval(()=>{ highlight((S.litIndex+1)%18); sfxTick(step++%12); }, 80);
+}
+function stopSpin(){
+  if(S.phase!=="spinning") return;
+  clearInterval(S.fastTimer); S.fastTimer=null;
+  S.phase="decel"; setActions([]); setStatus("…","");
+  const target = pickTargetIndex();                        // backend decides the landing square
+  const rawDist = ((target - S.litIndex) % 18 + 18) % 18;
+  const totalSteps = rawDist + 18;                         // one extra lap for a satisfying decel
+  decelStep(totalSteps, totalSteps, target);
+}
+function decelStep(remaining, totalSteps, target){
+  const taken = totalSteps - remaining;
+  highlight((S.litIndex+1)%18);
+  sfxTick(24 - Math.min(24, Math.round((taken/totalSteps)*24)));
+  if(remaining<=1){ landOn(target); return; }
+  const t = taken/totalSteps;
+  const delay = 80 + 400*Math.pow(t,2.3);
+  setTimeout(()=>decelStep(remaining-1,totalSteps,target), delay);
+}
+function landOn(target){
+  highlight(target);
+  tileEls[target].classList.add("win");
+  applyOutcome(S.board[target]);
+}
+
+/* ==========================================================================
+   9. OUTCOMES  (prize win  or  whammy)
+   ========================================================================== */
+function applyOutcome(tile){
+  S.phase="result";
+  if(tile.type==="prize"){ awardPrize(tile.prize); }
+  else { doWhammy(); }   // whammy (soldout is never landable)
+}
+
+/* PHYSICAL PRIZE — inventory decrements immediately (Standard D) */
+function awardPrize(prize){
+  prize.inventory -= 1;
+  saveLocal();
+  sfxFanfare();
+  showWinner(prize);
+}
+function showWinner(prize){
+  const ov=$("#winnerOverlay"), img=$("#winnerImg"), txt=$("#winnerText");
+  if(prize.winnerImg){ img.src=prize.winnerImg; img.style.display="block"; txt.style.display="none"; }
+  else { img.style.display="none"; txt.style.display="flex"; txt.querySelector(".wname").textContent=(prize.icon?prize.icon+" ":"")+prize.name; }
+  $(".dismissHint",ov).textContent = "Tap anywhere to play again";
+  showOverlay("#winnerOverlay"); fireConfetti();
+  armDismiss(ov, ()=>{ hideOverlay("#winnerOverlay"); stopConfetti(); resetGame(); });
+}
+
+/* WHAMMY — no prize; screen shake + overlay, then reset */
+function doWhammy(){
+  sfxWhammy();
+  const stage=$("#stage");
+  if(!REDUCED){ stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); }
+  const ov=$("#whammyOverlay");
+  showOverlay("#whammyOverlay");
+  armDismiss(ov, ()=>{ hideOverlay("#whammyOverlay"); resetGame(); }, 2600);
+}
+
+/* Reset for the next player (inventory changes already persisted) */
+function resetGame(){
+  S.phase="idle";
+  rebuildBoard(); paintTiles();
+  tileEls.forEach(t=>t.classList.remove("lit","win"));
+  $("#bigIcon").textContent="🎯";
+  setStatus("SPIN THE BOARD!","Land on a prize — dodge the Whammy!");
+  setActions([{label:"Spin!",cls:"btn-spin",fn:startSpin,aria:"Spin the board"}]);
+}
+
+/* ==========================================================================
+   10. OVERLAY HELPERS
+   ========================================================================== */
+function showOverlay(sel){ $(sel).classList.add("show"); }
+function hideOverlay(sel){ $(sel).classList.remove("show"); }
+/* Attach a one-shot tap-to-dismiss (plus optional auto-timeout) to an overlay */
+function armDismiss(ov, fn, autoMs){
+  let done=false, timer=null;
+  const go=()=>{ if(done) return; done=true; if(timer) clearTimeout(timer);
+    ov.removeEventListener("touchstart",go); ov.removeEventListener("click",go); fn(); };
+  setTimeout(()=>{ ov.addEventListener("touchstart",go,{passive:true}); ov.addEventListener("click",go); }, 400);
+  if(autoMs) timer=setTimeout(go, autoMs);
+}
+
+/* ==========================================================================
+   11. CONFETTI (rAF)
+   ========================================================================== */
+const confettiCanvas=$("#confetti"), ctx=confettiCanvas.getContext("2d");
+let confParticles=[], confRAF=null, confLoop=false;
+function sizeCanvas(){ confettiCanvas.width=innerWidth; confettiCanvas.height=innerHeight; }
+function fireConfetti(loop){
+  if(REDUCED) return;
+  sizeCanvas(); confettiCanvas.classList.add("show"); confLoop=!!loop;
+  const colors=["#fde047","#22d3ee","#f472b6","#a3e635","#f59e0b","#ffffff"];
+  const n=loop?160:120;
+  for(let i=0;i<n;i++){
+    confParticles.push({ x:Math.random()*innerWidth, y:-20-Math.random()*innerHeight*0.4,
+      vx:(Math.random()-0.5)*6, vy:2+Math.random()*5, s:5+Math.random()*8,
+      rot:Math.random()*6.28, vr:(Math.random()-0.5)*0.3, color:colors[(Math.random()*colors.length)|0] });
+  }
+  if(!confRAF) confRAF=requestAnimationFrame(confTick);
+}
+function confTick(){
+  ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+  confParticles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.rot+=p.vr;
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.color;
+    ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6); ctx.restore(); });
+  confParticles=confParticles.filter(p=>p.y<confettiCanvas.height+30);
+  if(confLoop && confParticles.length<80) fireConfetti(true);
+  if(confParticles.length){ confRAF=requestAnimationFrame(confTick); }
+  else { confRAF=null; confettiCanvas.classList.remove("show"); }
+}
+function stopConfetti(){ confLoop=false; }
+addEventListener("resize", ()=>{ if(confettiCanvas.classList.contains("show")) sizeCanvas(); });
+
+/* ==========================================================================
+   12. APPEARANCE
+   ========================================================================== */
+function applyAppearance(){
+  document.documentElement.style.setProperty("--accent", cfg.accent);
+  const stage=$("#stage");
+  $("#title").textContent = cfg.title || "PRESS YOUR LUCK";
+  if(cfg.bgMode==="image" && cfg.bgImage){
+    stage.style.background = `center/cover no-repeat url(${cfg.bgImage})`;
+  } else {
+    document.documentElement.style.setProperty("--bg", cfg.bgColor);
+    stage.style.background = `radial-gradient(120% 90% at 50% -10%, rgba(255,255,255,.06), transparent 60%), ${cfg.bgColor}`;
+  }
+}
+
+/* ==========================================================================
+   13. ADMIN PANEL
+   ========================================================================== */
+let adminUnlocked=false;
+function openAdmin(){ $("#adminPanel").classList.add("show"); $("#adminPanel").setAttribute("aria-hidden","false"); $("#adminBackdrop").classList.add("show"); syncAdminForm(); }
+function closeAdmin(){ $("#adminPanel").classList.remove("show"); $("#adminPanel").setAttribute("aria-hidden","true"); $("#adminBackdrop").classList.remove("show"); }
+bindPress($("#gearBtn"), ()=>{ if(adminUnlocked) openAdmin(); else openPin(); });
+bindPress($("#adminClose"), closeAdmin);
+$("#adminBackdrop").addEventListener("click", closeAdmin);
+
+/* PIN keypad */
+let pinBuf="";
+function openPin(){ pinBuf=""; renderPinDots(); $("#pinOverlay").classList.add("show"); }
+function closePin(){ $("#pinOverlay").classList.remove("show"); }
+function renderPinDots(){ document.querySelectorAll("#pinBox .dot").forEach((d,i)=>d.classList.toggle("on", i<pinBuf.length)); }
+document.querySelectorAll("#pinBox .keys button").forEach(b=>{
+  bindPress(b, ()=>{
+    const k=b.dataset.k;
+    if(k==="x"){ closePin(); return; }
+    if(k==="del"){ pinBuf=pinBuf.slice(0,-1); renderPinDots(); return; }
+    if(pinBuf.length<4){ pinBuf+=k; renderPinDots(); }
+    if(pinBuf.length===4){
+      if(pinBuf===ADMIN_CODE){ adminUnlocked=true; closePin(); openAdmin(); }
+      else { const box=$("#pinBox"); box.classList.add("err"); beep(140,0.2,"sawtooth",0.1); setTimeout(()=>{box.classList.remove("err");pinBuf="";renderPinDots();},420); }
+    }
+  });
+});
+
+/* form <-> config */
+function syncAdminForm(){
+  $("#cfgTitle").value = cfg.title;
+  $("#cfgAccent").value = cfg.accent;
+  $("#cfgBgColor").value = cfg.bgColor;
+  $("#cfgWhammy").value = Math.round(cfg.whammyProb*100); $("#whammyVal").textContent = Math.round(cfg.whammyProb*100)+"%";
+  updateBgMode(); $("#bgPrev").src = cfg.bgImage||"";
+  renderMiniBoard();
+  renderPrizeEditor();
+}
+function updateBgMode(){
+  $("#bgColorBtn").classList.toggle("active", cfg.bgMode==="color");
+  $("#bgImageBtn").classList.toggle("active", cfg.bgMode==="image");
+  $("#bgColorRow").style.display = cfg.bgMode==="color"?"flex":"none";
+  $("#bgImageRow").style.display = cfg.bgMode==="image"?"flex":"none";
+}
+$("#cfgTitle").addEventListener("input", e=>{ cfg.title=e.target.value; applyAppearance(); saveLocal(); });
+$("#cfgAccent").addEventListener("input", e=>{ cfg.accent=e.target.value; applyAppearance(); saveLocal(); });
+$("#cfgBgColor").addEventListener("input", e=>{ cfg.bgColor=e.target.value; applyAppearance(); saveLocal(); });
+bindPress($("#bgColorBtn"), ()=>{ cfg.bgMode="color"; updateBgMode(); applyAppearance(); saveLocal(); });
+bindPress($("#bgImageBtn"), ()=>{ cfg.bgMode="image"; updateBgMode(); applyAppearance(); saveLocal(); });
+$("#bgFile").addEventListener("change", async e=>{ const f=e.target.files[0]; if(!f)return; cfg.bgImage=await compressImage(f,1400); cfg.bgMode="image"; $("#bgPrev").src=cfg.bgImage; updateBgMode(); applyAppearance(); saveLocal(); });
+bindPress($("#bgClear"), ()=>{ cfg.bgImage=""; $("#bgPrev").src=""; cfg.bgMode="color"; updateBgMode(); applyAppearance(); saveLocal(); });
+$("#cfgWhammy").addEventListener("input", e=>{ cfg.whammyProb=(+e.target.value)/100; $("#whammyVal").textContent=e.target.value+"%"; saveLocal(); });
+
+bindPress($("#exportBtn"), exportConfig);
+bindPress($("#resetCfg"), ()=>{ if(confirm("Reset all settings to defaults? This clears prizes, board layout & images on this device.")){ cfg=defaultConfig(); saveLocal(); applyAppearance(); syncAdminForm(); resetGame(); } });
+
+/* ---- Per-square board editor ---- */
+function squareSummary(cell){
+  if(cell.type==="prize"){ const p=cfg.prizes.find(x=>x.id===cell.prizeId); if(p) return {label:p.name, color:p.color, icon:(p.icon||"🎁"), dead:p.inventory<=0}; return {label:"(missing)", color:"#c1122e", icon:"✕", whammy:true}; }
+  return {label:"WHAMMY", color:"#c1122e", whammy:true};
+}
+function renderMiniBoard(){
+  const mb=$("#miniBoard"); mb.innerHTML="";
+  const center=el("div","mini center"); center.textContent="TAP A SQUARE"; center.style.gridColumn="2/6"; center.style.gridRow="2/5"; mb.appendChild(center);
+  cfg.layout.forEach((cell,i)=>{
+    const s=squareSummary(cell);
+    const m=el("button","mini"+(s.whammy?" whammy":"")+(s.dead?" soldout":""));
+    const [r,c]=PERIM[i]; m.style.gridRow=r; m.style.gridColumn=c;
+    if(!s.whammy) m.style.background=`linear-gradient(160deg, ${s.color}, ${shade(s.color,-28)})`;
+    m.innerHTML = s.whammy ? '<span class="mico">✕</span>' : `<span class="mico">${s.icon}</span>`;
+    m.setAttribute("aria-label", `Square ${i+1}: ${s.label}. Tap to change.`);
+    bindPress(m, ()=>openPicker(i));
+    mb.appendChild(m);
+  });
+}
+
+/* ---- Square picker overlay ---- */
+let pickIdx=null;
+function openPicker(i){
+  pickIdx=i;
+  $("#pickTitle").textContent = "Square "+(i+1);
+  const opts=$("#pickOpts"); opts.innerHTML="";
+  const cur=cfg.layout[i];
+  // Whammy option
+  const wa=el("button","pickOpt"+(cur.type==="whammy"?" sel":""));
+  wa.innerHTML='<span class="sw" style="background:#c1122e">✕</span><span>Whammy</span>';
+  bindPress(wa, ()=>setSquare({type:"whammy"}));
+  opts.appendChild(wa);
+  // Prize options
+  cfg.prizes.forEach(p=>{
+    const o=el("button","pickOpt"+(cur.type==="prize"&&cur.prizeId===p.id?" sel":""));
+    o.innerHTML = `<span class="sw" style="background:${p.color}">${p.thumb?"":p.icon||"🎁"}</span><span>${p.name}</span><span class="meta">${p.inventory} left</span>`;
+    bindPress(o, ()=>setSquare({type:"prize",prizeId:p.id}));
+    opts.appendChild(o);
+  });
+  $("#squarePicker").classList.add("show");
+}
+function setSquare(cell){
+  if(pickIdx==null) return;
+  cfg.layout[pickIdx]=cell;
+  saveLocal();
+  $("#squarePicker").classList.remove("show");
+  renderMiniBoard();
+  if(S.phase==="idle"){ rebuildBoard(); paintTiles(); }
+}
+bindPress($("#pickCancel"), ()=>$("#squarePicker").classList.remove("show"));
+$("#squarePicker").addEventListener("click", e=>{ if(e.target.id==="squarePicker") $("#squarePicker").classList.remove("show"); });
+
+/* ---- Prize definitions CRUD ---- */
+function renderPrizeEditor(){
+  const list=$("#prizeList"); list.innerHTML="";
+  cfg.prizes.forEach((p,idx)=>{
+    const card=el("div","prizeCard");
+    card.innerHTML = `
+      <div class="pc-top">
+        <span class="pc-sw" style="background:${p.color}"></span>
+        <span class="pc-name">${p.name||"(unnamed)"}</span>
+        <button class="miniBtn danger" data-del="${idx}">Delete</button>
+      </div>
+      <div class="row"><label>Name</label><input type="text" data-f="name" data-i="${idx}" value="${(p.name||"").replace(/"/g,'&quot;')}" style="width:60%"></div>
+      <div class="row"><label>Inventory</label><input type="number" data-f="inventory" data-i="${idx}" min="0" value="${p.inventory}" style="width:80px"></div>
+      <div class="row"><label>Icon (emoji)</label><input type="text" data-f="icon" data-i="${idx}" maxlength="4" value="${p.icon||""}" style="width:80px"></div>
+      <div class="row"><label>Color</label><input type="color" data-f="color" data-i="${idx}" value="${p.color}"></div>
+      <div class="imgSlot"><img class="prev" src="${p.thumb||""}" alt=""><label class="fileLbl">Board icon<input type="file" accept="image/*" data-thumb="${idx}"></label><span style="opacity:.5">512px</span></div>
+      <div class="imgSlot"><img class="prev" src="${p.winnerImg||""}" alt=""><label class="fileLbl">Winner image<input type="file" accept="image/*" data-winner="${idx}"></label><span style="opacity:.5">1400px</span></div>
+    `;
+    list.appendChild(card);
+  });
+  list.querySelectorAll("input[data-f]").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const i=+e.target.dataset.i, f=e.target.dataset.f, v=e.target.value;
+      if(f==="inventory") cfg.prizes[i].inventory=Math.max(0,+v||0);
+      else cfg.prizes[i][f]=v;
+      if(f==="color"||f==="name"){ const c=$("#prizeList").children[i]; c.querySelector(".pc-sw").style.background=cfg.prizes[i].color; c.querySelector(".pc-name").textContent=cfg.prizes[i].name||"(unnamed)"; }
+      renderMiniBoard();
+      if(S.phase==="idle"){ rebuildBoard(); paintTiles(); }
+      saveLocal();
+    });
+  });
+  list.querySelectorAll("[data-del]").forEach(b=> bindPress(b, ()=>{ cfg.prizes.splice(+b.dataset.del,1); saveLocal(); if(S.phase==="idle"){rebuildBoard();paintTiles();} renderPrizeEditor(); renderMiniBoard(); }));
+  list.querySelectorAll("[data-thumb]").forEach(inp=> inp.addEventListener("change", async e=>{ const f=e.target.files[0]; if(!f)return; const i=+e.target.dataset.thumb; cfg.prizes[i].thumb=await compressImage(f,512); saveLocal(); if(S.phase==="idle"){rebuildBoard();paintTiles();} renderPrizeEditor(); renderMiniBoard(); }));
+  list.querySelectorAll("[data-winner]").forEach(inp=> inp.addEventListener("change", async e=>{ const f=e.target.files[0]; if(!f)return; const i=+e.target.dataset.winner; cfg.prizes[i].winnerImg=await compressImage(f,1400); saveLocal(); renderPrizeEditor(); }));
+}
+bindPress($("#addPrize"), ()=>{ cfg.prizes.push({id:"p"+Date.now(), name:"New Prize", inventory:1, color:"#fbbf24", icon:"🎁", thumb:"", winnerImg:""}); saveLocal(); renderPrizeEditor(); renderMiniBoard(); });
+
+/* ==========================================================================
+   14. GLOBAL INPUT (Standard I) — keyboard, audio unlock, no gesture zoom
+   ========================================================================== */
+["touchstart","pointerdown","keydown"].forEach(ev=> addEventListener(ev, ()=>audio(), {once:true, passive:true}));
+addEventListener("keydown", e=>{
+  if(e.code==="Space"||e.code==="Enter"){
+    if(S.phase==="idle"){ e.preventDefault(); startSpin(); }
+    else if(S.phase==="spinning"){ e.preventDefault(); stopSpin(); }
+  }
+  if(e.key==="Escape"){ closeAdmin(); closePin(); $("#squarePicker").classList.remove("show"); }
+});
+document.addEventListener("gesturestart", e=>e.preventDefault());
+document.addEventListener("dblclick", e=>e.preventDefault());
+
+/* ==========================================================================
+   15. BOOT
+   ========================================================================== */
+(async function init(){
+  await bootConfig();
+  applyAppearance();
+  rebuildBoard();
+  buildTiles();
+  setStatus("SPIN THE BOARD!","Land on a prize — dodge the Whammy!");
+  setActions([{label:"Spin!",cls:"btn-spin",fn:startSpin,aria:"Spin the board"}]);
+})();
+</script>
