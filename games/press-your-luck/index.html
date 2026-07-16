@@ -107,6 +107,7 @@
     gap:clamp(8px,2vmin,20px);padding:clamp(10px,2.4vmin,26px);text-align:center;
   }
   #bigIcon{font-size:clamp(30px,9vmin,64px);line-height:1;filter:drop-shadow(0 0 18px rgba(253,224,71,.45))}
+  #bigIcon img{height:clamp(44px,13vmin,104px);width:auto;max-width:72%;object-fit:contain;display:block}
   #status{font-size:clamp(17px,4.4vmin,36px);font-weight:900;letter-spacing:.02em;text-transform:uppercase;min-height:1.2em;text-shadow:0 0 12px rgba(34,211,238,.4)}
   #subStatus{font-size:clamp(11px,2.2vmin,17px);opacity:.82;font-weight:700;min-height:1em}
   #actions{display:flex;gap:clamp(8px,2vmin,18px);flex-wrap:wrap;justify-content:center;width:100%}
@@ -180,6 +181,7 @@
   .mini.center{grid-column:2/6;grid-row:2/5;background:rgba(0,0,0,.3);color:var(--text);opacity:.7;font-size:11px;cursor:default;text-shadow:none;box-shadow:none}
   .mini .mlbl{font-size:clamp(6px,18cqmin,11px)}
   .mini .mico{font-size:clamp(11px,40cqmin,22px)}
+  .mini .mimg{width:60%;height:60%;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
   .mini.whammy{background:linear-gradient(160deg,#ff5470,#c1122e)}
   .mini.soldout{filter:grayscale(1) brightness(.6)}
 
@@ -190,7 +192,8 @@
   .pickBox h3{margin:0 0 4px;color:var(--neon);font-size:16px}
   .pickBox .psub{font-size:12px;opacity:.6;margin-bottom:12px}
   .pickOpt{display:flex;align-items:center;gap:10px;width:100%;background:#0d0522;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-weight:800;font-size:14px;text-align:left;color:var(--text)}
-  .pickOpt .sw{width:22px;height:22px;border-radius:6px;flex:0 0 auto;display:grid;place-items:center;font-size:13px}
+  .pickOpt .sw{width:22px;height:22px;border-radius:6px;flex:0 0 auto;display:grid;place-items:center;font-size:13px;overflow:hidden}
+  .pickOpt .sw img{width:100%;height:100%;object-fit:contain}
   .pickOpt .meta{margin-left:auto;font-size:11px;opacity:.6;font-weight:700}
   .pickOpt.sel{outline:2px solid var(--accent)}
 
@@ -284,6 +287,24 @@
       <div class="hint">Whammy % is the total chance of landing on any whammy. The rest is split evenly across the live prize squares.</div>
       <div class="row"><label>Whammy chance</label><span class="val" id="whammyVal">18%</span></div>
       <input type="range" id="cfgWhammy" min="0" max="40" step="1">
+    </div>
+
+    <div class="fieldset">
+      <div class="h">Whammy Look</div>
+      <div class="hint">Set the whammy tile color and (optionally) its icon.</div>
+      <div class="row"><label>Whammy color</label><input type="color" id="cfgWhammyColor"></div>
+      <div class="imgSlot"><img class="prev" id="whammyPrev" alt=""><label class="fileLbl">Whammy icon<input type="file" accept="image/*" id="whammyFile"></label><button class="miniBtn ghost" id="whammyClear">Clear</button></div>
+    </div>
+
+    <div class="fieldset">
+      <div class="h">Centre Display</div>
+      <div class="hint">The text and icon shown in the middle before a spin.</div>
+      <div class="row"><label for="cfgIdleTitle">Headline</label></div>
+      <input type="text" id="cfgIdleTitle" maxlength="40">
+      <div class="row" style="margin-top:8px"><label for="cfgIdleSub">Sub-text</label></div>
+      <input type="text" id="cfgIdleSub" maxlength="60">
+      <div class="row"><label>Icon (emoji)</label><input type="text" id="cfgCentreIcon" maxlength="4" style="width:80px"></div>
+      <div class="imgSlot"><img class="prev" id="centrePrev" alt=""><label class="fileLbl">Icon image<input type="file" accept="image/*" id="centreFile"></label><button class="miniBtn ghost" id="centreClear">Clear</button></div>
     </div>
 
     <!-- Per-square board editor (Plinko-style) -->
@@ -381,6 +402,12 @@ function defaultConfig(){
     bgColor: "#160a2e",
     bgImage: "",
     whammyProb: 0.18,           // total chance of any whammy square
+    whammyColor: "#c1122e",     // whammy tile color (admin-editable)
+    whammyImg: "",              // uploaded whammy icon; empty -> built-in face
+    centreIcon: "🎯",           // centre-console emoji (admin-editable)
+    centreImg: "",              // uploaded centre icon/image; empty -> emoji
+    idleTitle: "SPIN THE BOARD!",
+    idleSub: "Land on a prize — dodge the Whammy!",
     prizes: [
       { id:"p1", name:"Gaming Console", inventory:5,  color:"#f472b6", icon:"🎮", thumb:"", winnerImg:"" },
       { id:"p2", name:"Weekend Trip",   inventory:3,  color:"#38bdf8", icon:"✈️", thumb:"", winnerImg:"" },
@@ -527,10 +554,17 @@ function paintTiles(){
       if(tile.type==="soldout"){ node.classList.add("t-soldout"); node.insertAdjacentHTML("beforeend",'<span class="sold">SOLD OUT</span>'); }
     } else {
       node.classList.add("t-whammy");
-      node.innerHTML = whammyFaceSVG();
+      node.style.background = `linear-gradient(160deg, ${cfg.whammyColor}, ${shade(cfg.whammyColor,-40)})`;
+      node.innerHTML = cfg.whammyImg ? `<img class="thumb" src="${cfg.whammyImg}" alt="">` : whammyFaceSVG();
       node.setAttribute("aria-label","Whammy");
     }
   });
+}
+/* Render the centre-console icon: uploaded image if set, otherwise the emoji */
+function renderCentreIcon(){
+  const b=$("#bigIcon");
+  if(cfg.centreImg) b.innerHTML = `<img src="${cfg.centreImg}" alt="">`;
+  else b.textContent = cfg.centreIcon || "🎯";
 }
 
 function setStatus(main,sub){ $("#status").textContent=main; if(sub!==undefined) $("#subStatus").textContent=sub; }
@@ -587,7 +621,6 @@ function highlight(i){ tileEls.forEach(t=>t.classList.remove("lit","win")); tile
 function startSpin(){
   if(S.phase!=="idle") return;
   S.phase="spinning";
-  $("#bigIcon").textContent="🎡";
   setStatus("SPINNING…","Hit STOP to lock it in!");
   setActions([{label:"STOP!",cls:"btn-stop",fn:stopSpin,aria:"Stop the board"}]);
   let step=0;
@@ -657,8 +690,8 @@ function resetGame(){
   S.phase="idle";
   rebuildBoard(); paintTiles();
   tileEls.forEach(t=>t.classList.remove("lit","win"));
-  $("#bigIcon").textContent="🎯";
-  setStatus("SPIN THE BOARD!","Land on a prize — dodge the Whammy!");
+  renderCentreIcon();
+  setStatus(cfg.idleTitle||"SPIN THE BOARD!", cfg.idleSub||"Land on a prize — dodge the Whammy!");
   setActions([{label:"Spin!",cls:"btn-spin",fn:startSpin,aria:"Spin the board"}]);
 }
 
@@ -756,6 +789,9 @@ function syncAdminForm(){
   $("#cfgAccent").value = cfg.accent;
   $("#cfgBgColor").value = cfg.bgColor;
   $("#cfgWhammy").value = Math.round(cfg.whammyProb*100); $("#whammyVal").textContent = Math.round(cfg.whammyProb*100)+"%";
+  $("#cfgWhammyColor").value = cfg.whammyColor; $("#whammyPrev").src = cfg.whammyImg||"";
+  $("#cfgIdleTitle").value = cfg.idleTitle; $("#cfgIdleSub").value = cfg.idleSub;
+  $("#cfgCentreIcon").value = cfg.centreIcon||""; $("#centrePrev").src = cfg.centreImg||"";
   updateBgMode(); $("#bgPrev").src = cfg.bgImage||"";
   renderMiniBoard();
   renderPrizeEditor();
@@ -775,13 +811,25 @@ $("#bgFile").addEventListener("change", async e=>{ const f=e.target.files[0]; if
 bindPress($("#bgClear"), ()=>{ cfg.bgImage=""; $("#bgPrev").src=""; cfg.bgMode="color"; updateBgMode(); applyAppearance(); saveLocal(); });
 $("#cfgWhammy").addEventListener("input", e=>{ cfg.whammyProb=(+e.target.value)/100; $("#whammyVal").textContent=e.target.value+"%"; saveLocal(); });
 
+/* Whammy look */
+$("#cfgWhammyColor").addEventListener("input", e=>{ cfg.whammyColor=e.target.value; if(S.phase==="idle") paintTiles(); renderMiniBoard(); saveLocal(); });
+$("#whammyFile").addEventListener("change", async e=>{ const f=e.target.files[0]; if(!f)return; cfg.whammyImg=await compressImage(f,512); $("#whammyPrev").src=cfg.whammyImg; if(S.phase==="idle") paintTiles(); renderMiniBoard(); saveLocal(); });
+bindPress($("#whammyClear"), ()=>{ cfg.whammyImg=""; $("#whammyPrev").src=""; if(S.phase==="idle") paintTiles(); renderMiniBoard(); saveLocal(); });
+
+/* Centre display */
+$("#cfgIdleTitle").addEventListener("input", e=>{ cfg.idleTitle=e.target.value; if(S.phase==="idle") setStatus(cfg.idleTitle, cfg.idleSub); saveLocal(); });
+$("#cfgIdleSub").addEventListener("input", e=>{ cfg.idleSub=e.target.value; if(S.phase==="idle") setStatus(cfg.idleTitle, cfg.idleSub); saveLocal(); });
+$("#cfgCentreIcon").addEventListener("input", e=>{ cfg.centreIcon=e.target.value; if(!cfg.centreImg) renderCentreIcon(); saveLocal(); });
+$("#centreFile").addEventListener("change", async e=>{ const f=e.target.files[0]; if(!f)return; cfg.centreImg=await compressImage(f,512); $("#centrePrev").src=cfg.centreImg; renderCentreIcon(); saveLocal(); });
+bindPress($("#centreClear"), ()=>{ cfg.centreImg=""; $("#centrePrev").src=""; renderCentreIcon(); saveLocal(); });
+
 bindPress($("#exportBtn"), exportConfig);
 bindPress($("#resetCfg"), ()=>{ if(confirm("Reset all settings to defaults? This clears prizes, board layout & images on this device.")){ cfg=defaultConfig(); saveLocal(); applyAppearance(); syncAdminForm(); resetGame(); } });
 
 /* ---- Per-square board editor ---- */
 function squareSummary(cell){
-  if(cell.type==="prize"){ const p=cfg.prizes.find(x=>x.id===cell.prizeId); if(p) return {label:p.name, color:p.color, icon:(p.icon||"🎁"), dead:p.inventory<=0}; return {label:"(missing)", color:"#c1122e", icon:"✕", whammy:true}; }
-  return {label:"WHAMMY", color:"#c1122e", whammy:true};
+  if(cell.type==="prize"){ const p=cfg.prizes.find(x=>x.id===cell.prizeId); if(p) return {label:p.name, color:p.color, icon:(p.icon||"🎁"), dead:p.inventory<=0}; return {label:"(missing)", whammy:true}; }
+  return {label:"WHAMMY", whammy:true};
 }
 function renderMiniBoard(){
   const mb=$("#miniBoard"); mb.innerHTML="";
@@ -790,8 +838,12 @@ function renderMiniBoard(){
     const s=squareSummary(cell);
     const m=el("button","mini"+(s.whammy?" whammy":"")+(s.dead?" soldout":""));
     const [r,c]=PERIM[i]; m.style.gridRow=r; m.style.gridColumn=c;
-    if(!s.whammy) m.style.background=`linear-gradient(160deg, ${s.color}, ${shade(s.color,-28)})`;
-    m.innerHTML = s.whammy ? '<span class="mico">✕</span>' : `<span class="mico">${s.icon}</span>`;
+    m.style.background = s.whammy
+      ? `linear-gradient(160deg, ${cfg.whammyColor}, ${shade(cfg.whammyColor,-40)})`
+      : `linear-gradient(160deg, ${s.color}, ${shade(s.color,-28)})`;
+    m.innerHTML = s.whammy
+      ? (cfg.whammyImg ? `<img class="mimg" src="${cfg.whammyImg}" alt="">` : '<span class="mico">✕</span>')
+      : `<span class="mico">${s.icon}</span>`;
     m.setAttribute("aria-label", `Square ${i+1}: ${s.label}. Tap to change.`);
     bindPress(m, ()=>openPicker(i));
     mb.appendChild(m);
@@ -807,7 +859,7 @@ function openPicker(i){
   const cur=cfg.layout[i];
   // Whammy option
   const wa=el("button","pickOpt"+(cur.type==="whammy"?" sel":""));
-  wa.innerHTML='<span class="sw" style="background:#c1122e">✕</span><span>Whammy</span>';
+  wa.innerHTML=`<span class="sw" style="background:${cfg.whammyColor}">${cfg.whammyImg?`<img src="${cfg.whammyImg}" alt="">`:"✕"}</span><span>Whammy</span>`;
   bindPress(wa, ()=>setSquare({type:"whammy"}));
   opts.appendChild(wa);
   // Prize options
@@ -889,7 +941,8 @@ document.addEventListener("dblclick", e=>e.preventDefault());
   applyAppearance();
   rebuildBoard();
   buildTiles();
-  setStatus("SPIN THE BOARD!","Land on a prize — dodge the Whammy!");
+  renderCentreIcon();
+  setStatus(cfg.idleTitle||"SPIN THE BOARD!", cfg.idleSub||"Land on a prize — dodge the Whammy!");
   setActions([{label:"Spin!",cls:"btn-spin",fn:startSpin,aria:"Spin the board"}]);
 })();
 </script>
