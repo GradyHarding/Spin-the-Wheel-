@@ -924,5 +924,38 @@ input[type="color"].hub-color {
     resetIdle();   // start the idle countdown
   })();
   </script>
+   <script>
+(function () {
+  var hub = document.getElementById("hub");
+  if (!hub) return;
+  var startY = 0, startScroll = 0, dragging = false, lastY = 0, lastT = 0, vel = 0, raf = null;
+  hub.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1) return;
+    dragging = true;
+    startY = lastY = e.touches[0].clientY;
+    startScroll = hub.scrollTop;
+    lastT = e.timeStamp; vel = 0;
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+  }, { passive: true });
+  hub.addEventListener("touchmove", function (e) {
+    if (!dragging || e.touches.length !== 1) return;
+    var y = e.touches[0].clientY;
+    hub.scrollTop = startScroll - (y - startY);
+    var dt = e.timeStamp - lastT;
+    if (dt > 0) vel = (y - lastY) / dt;
+    lastY = y; lastT = e.timeStamp;
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+  hub.addEventListener("touchend", function () {
+    dragging = false;
+    var v = vel * 16;
+    (function glide() {
+      if (Math.abs(v) < 0.4) { raf = null; return; }
+      hub.scrollTop -= v; v *= 0.94;
+      raf = requestAnimationFrame(glide);
+    })();
+  }, { passive: true });
+})();
+</script>
 </body>
 </html>
