@@ -109,9 +109,8 @@ body {
   display: flex;
   flex-direction: column;
   padding: var(--space-xl) var(--space-lg) var(--space-lg);
-  transition: opacity var(--transition-view), transform var(--transition-view);
-  overflow-y: auto;                 
-  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;                 /* ← this is what lets it scroll */
+  -webkit-overflow-scrolling: touch;/* ← smooth touch-scroll on the kiosk */
 }
 
 /* When a game is live, the hub slides/fades out behind the iframe */
