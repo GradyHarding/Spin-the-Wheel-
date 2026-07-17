@@ -106,14 +106,15 @@ body {
 #hub {
   position: absolute;
   inset: 0;
+  height: 100%;                      /* ← iOS won't scroll a top/bottom-sized box without this */
   display: flex;
   flex-direction: column;
   padding: var(--space-xl) var(--space-lg) var(--space-lg);
   transition: opacity var(--transition-view), transform var(--transition-view);
-  overflow-y: auto;                  /* scroll when the grid overflows */
+  overflow-y: scroll;                /* ← 'scroll' is more reliable than 'auto' on iOS */
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch; /* ← iOS/iPadOS momentum scroll (the missing piece) */
-  touch-action: pan-y;               /* allow the vertical finger-drag */
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   overscroll-behavior: contain;
 }
 
