@@ -1,0 +1,1096 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Match &amp; Win</title>
+<style>
+  /* ============================================================
+     THEME + LAYOUT
+     ============================================================ */
+  :root{
+    --accent:#ff4757;          /* card-back + highlight color (config.accent) */
+    --neon2:#08d9d6;
+    --gold:#ffd93d;
+    --panel:#171a2b;
+    --panel-2:#20243b;
+    --ink:#eef1ff;
+    --muted:#9aa0c3;
+    --ok:#2ecc71;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    height:100%; width:100%; margin:0;
+    overflow:hidden;                      /* kiosk: no scroll / bounce */
+    overscroll-behavior:none;
+  }
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+    color:var(--ink);
+    background:#12172b;                    /* replaced at runtime by theme */
+    -webkit-font-smoothing:antialiased;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none;                     /* no pinch / double-tap zoom on the play field */
+  }
+
+  /* Stage: headline on top, card grid filling the rest. */
+  #stage{
+    position:fixed; inset:0;
+    display:flex; flex-direction:column; align-items:center;
+    padding:14px;
+  }
+  #header{
+    flex:0 0 auto; text-align:center; padding:4px 8px 10px; max-width:96vw;
+  }
+  #headline{
+    margin:0; font-size:clamp(22px, 4.5vw, 46px); font-weight:900; letter-spacing:.5px;
+    text-shadow:0 2px 14px rgba(0,0,0,.4);
+  }
+  #subhead{
+    margin:6px 0 0; font-size:clamp(12px, 1.8vw, 18px); color:var(--muted); font-weight:600;
+  }
+
+  /* Card grid — sized in JS so it always fits the viewport. */
+  #boardWrap{
+    flex:1 1 auto; width:100%;
+    display:flex; align-items:center; justify-content:center;
+    min-height:0;
+  }
+  #board{
+    display:grid; gap:12px;
+    justify-content:center; align-content:center;
+  }
+
+  /* A single card: a 3D flip between back and prize face. */
+  .card{
+    position:relative;
+    aspect-ratio:3/4;
+    perspective:900px;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  .card-inner{
+    position:absolute; inset:0;
+    transform-style:preserve-3d;
+    transition:transform .45s cubic-bezier(.4,0,.2,1);
+    border-radius:14px;
+  }
+  .card.flipped .card-inner,
+  .card.matched .card-inner{ transform:rotateY(180deg); }
+  .card:active .card-inner{ filter:brightness(1.05); }
+
+  .face{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:14px; overflow:hidden;
+    -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    box-shadow:0 8px 22px rgba(0,0,0,.4);
+  }
+  /* Back (face-down) — solid accent OR uploaded card-back image. */
+  .face-back{
+    background:
+      radial-gradient(120% 120% at 30% 20%, rgba(255,255,255,.22), transparent 55%),
+      var(--accent);
+    background-size:cover; background-position:center;
+    border:2px solid rgba(255,255,255,.18);
+  }
+  .face-back .back-emblem{
+    font-size:clamp(16px, calc(var(--card-w, 80px) * 0.4), 60px); color:rgba(255,255,255,.85);
+    text-shadow:0 2px 8px rgba(0,0,0,.35);
+  }
+  body.back-image .face-back .back-emblem{ display:none; }  /* hide emblem when a custom image is used */
+
+  /* Front (revealed prize). */
+  .face-front{
+    transform:rotateY(180deg);
+    flex-direction:column; gap:4px;
+    border:2px solid rgba(255,255,255,.25);
+    color:#0f1024; font-weight:800; text-align:center; padding:6px;
+  }
+  .face-front .prize-icon{ font-size:clamp(20px, calc(var(--card-w, 80px) * 0.42), 90px); line-height:1; }
+  .face-front .prize-icon img{ width:100%; height:100%; object-fit:contain; }
+  .face-front .prize-name{
+    font-size:clamp(9px, calc(var(--card-w, 80px) * 0.15), 18px); line-height:1.1; max-width:100%;
+    overflow:hidden; text-overflow:ellipsis; display:-webkit-box;
+    -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  }
+  .face-front.has-img{ padding:0; }
+  .face-front.has-img .prize-icon{ position:absolute; inset:0; }
+  .face-front.has-img .prize-name{ display:none; }
+
+  .card.matched{ animation:pop .45s ease; }
+  @keyframes pop{ 0%{ transform:scale(1);} 40%{ transform:scale(1.08);} 100%{ transform:scale(1);} }
+  .card.wrong .card-inner{ animation:shake .4s ease; }
+  @keyframes shake{ 0%,100%{ transform:rotateY(180deg) translateX(0);} 25%{ transform:rotateY(180deg) translateX(-5px);} 75%{ transform:rotateY(180deg) translateX(5px);} }
+
+  /* Empty-board notice (all prizes claimed). */
+  #emptyNote{
+    display:none; text-align:center; color:var(--gold); font-weight:800;
+    font-size:clamp(18px, 3vw, 30px);
+  }
+  #emptyNote small{ display:block; margin-top:8px; color:var(--muted); font-weight:600; font-size:15px; }
+  body.board-empty #board{ display:none; }
+  body.board-empty #emptyNote{ display:block; }
+
+  /* Full-screen confetti overlay (above the win overlay so it rains over it). */
+  #confetti{ position:fixed; inset:0; pointer-events:none; z-index:75; }
+
+  /* ============================================================
+     GEAR / ADMIN
+     ============================================================ */
+  #gear{
+    position:fixed; top:14px; right:14px;
+    width:46px; height:46px; border-radius:12px;
+    border:1px solid rgba(255,255,255,.15);
+    background:rgba(20,22,40,.7); backdrop-filter:blur(8px);
+    color:var(--ink); font-size:22px; cursor:pointer; z-index:60;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .3s ease, background .2s;
+  }
+  #gear:hover{ transform:rotate(45deg); background:rgba(40,44,80,.8); }
+
+  #admin{
+    position:fixed; top:0; right:0; bottom:0;
+    width:380px; max-width:92vw;
+    background-color:var(--panel);
+    border-left:1px solid rgba(255,255,255,.08);
+    box-shadow:-18px 0 40px rgba(0,0,0,.5);
+    transform:translateX(105%);
+    transition:transform .35s cubic-bezier(.4,0,.2,1);
+    z-index:55; display:flex; flex-direction:column;
+  }
+  #admin.open{ transform:translateX(0); }
+  #admin header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 18px; border-bottom:1px solid rgba(255,255,255,.08);
+    background:var(--panel-2);
+  }
+  #admin header h2{ margin:0; font-size:17px; letter-spacing:.5px; }
+  #admin .body{
+    overflow-y:auto; padding:16px 18px 40px;
+    touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+  }
+  #admin .close{ background:none; border:none; color:var(--muted); font-size:24px; cursor:pointer; line-height:1; }
+
+  .section{
+    background:var(--panel-2); border:1px solid rgba(255,255,255,.06);
+    border-radius:14px; padding:14px; margin-bottom:16px;
+  }
+  .section h3{ margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--neon2); }
+  label{ display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
+  input[type=text],input[type=number]{
+    width:100%; padding:9px 10px; border-radius:9px; border:1px solid rgba(255,255,255,.12);
+    background:#0e1122; color:var(--ink); font-size:14px; outline:none;
+  }
+  input:focus{ border-color:var(--neon2); }
+  input[type=color]{ width:100%; height:38px; border-radius:9px; border:1px solid rgba(255,255,255,.12); background:#0e1122; cursor:pointer; }
+  .row{ display:flex; gap:10px; }
+  .row > *{ flex:1; }
+
+  .fileBtn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    width:100%; padding:8px; margin-top:4px;
+    background:#0e1122; border:1px dashed rgba(255,255,255,.2);
+    border-radius:9px; color:var(--muted); font-size:12px; cursor:pointer; transition:.15s;
+  }
+  .fileBtn:hover{ border-color:var(--neon2); color:var(--ink); }
+  .fileBtn.set{ border-style:solid; border-color:var(--ok); color:var(--ok); }
+  .fileBtn input{ display:none; }
+
+  .slotCard{ border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; margin-bottom:10px; background:#141830; }
+  .slotCard .tagRow{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .slotCard .tag{ display:inline-block; font-size:11px; font-weight:700; color:#0f1024; background:var(--gold); padding:2px 8px; border-radius:20px; }
+  .slotCard .del{ background:none; border:0; color:#ff6b81; font-size:12px; font-weight:700; cursor:pointer; }
+  .btn{
+    width:100%; padding:11px; border:none; border-radius:10px;
+    font-weight:800; font-size:14px; cursor:pointer; color:#fff;
+    background:linear-gradient(90deg,var(--neon2),#0b8f8c);
+  }
+  .btn.secondary{ background:#2a2f4d; }
+  .hint{ font-size:11px; color:var(--muted); margin-top:8px; line-height:1.5; }
+
+  /* Segmented pill selector (pairs + card-back type). */
+  .seg{ display:flex; gap:6px; flex-wrap:wrap; }
+  .seg button{
+    flex:1; min-width:44px; padding:10px 0; border-radius:9px; cursor:pointer; font-weight:800; font-size:14px;
+    border:1px solid rgba(255,255,255,.12); background:#0e1122; color:var(--muted);
+  }
+  .seg button.active{ background:var(--neon2); color:#04121a; border-color:var(--neon2); }
+
+  /* ============================================================
+     WIN OVERLAY (image only, tap anywhere to dismiss — matches the wheel/Plinko)
+     ============================================================ */
+  #modal{
+    position:fixed; inset:0; z-index:70; display:none;
+    align-items:center; justify-content:center;
+    background:rgba(0,0,0,.85); backdrop-filter:blur(4px); cursor:pointer;
+  }
+  #modal.show{ display:flex; }
+  #prizeImg{
+    width:100vw; height:100vh; height:100dvh; object-fit:contain; display:none;
+    animation:popIn .5s cubic-bezier(.18,.9,.32,1.4);
+  }
+  #prizeFallback{ text-align:center; padding:0 24px; display:none; animation:popIn .5s cubic-bezier(.18,.9,.32,1.4); }
+  @keyframes popIn{ from{ transform:scale(.6); opacity:0; } to{ transform:scale(1); opacity:1; } }
+  .winKicker{
+    font-size:15px; letter-spacing:3px; text-transform:uppercase;
+    color:var(--neon2); font-weight:800; margin-bottom:6px;
+    animation:blink 1s steps(2,start) infinite;
+  }
+  @keyframes blink{ 50%{ opacity:.35; } }
+  .prizeName{
+    font-size:34px; font-weight:900; line-height:1.1; margin:2px 0 16px;
+    background:linear-gradient(90deg,var(--gold),#fff6c2,var(--gold));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 2px 10px rgba(255,217,61,.25);
+    animation:wobble .7s ease-in-out infinite alternate;
+  }
+  @keyframes wobble{ from{ transform:rotate(-1.5deg) scale(1); } to{ transform:rotate(1.5deg) scale(1.03); } }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition-duration:1ms !important; animation-duration:1ms !important; }
+  }
+  audio{ display:none; }
+</style>
+</head>
+<body>
+
+  <!-- ============ GAME STAGE ============ -->
+  <div id="stage">
+    <div id="header">
+      <h1 id="headline">Match &amp; Win</h1>
+      <p id="subhead">Flip two cards — match a pair to win the prize!</p>
+    </div>
+    <div id="boardWrap">
+      <div id="board"></div>
+      <div id="emptyNote">ALL PRIZES CLAIMED<small>Restock inventory in ⚙️ settings</small></div>
+    </div>
+  </div>
+
+  <!-- ============ CONFETTI ============ -->
+  <canvas id="confetti"></canvas>
+
+  <!-- ============ ADMIN TOGGLE ============ -->
+  <button id="gear" title="Settings">⚙️</button>
+
+  <!-- ============ ADMIN PANEL ============ -->
+  <aside id="admin">
+    <header>
+      <h2>🎛️ Admin Panel</h2>
+      <button class="close" id="adminClose">×</button>
+    </header>
+    <div class="body">
+
+      <!-- GAME SETUP -->
+      <div class="section">
+        <h3>Game Setup</h3>
+        <label>Matches on the board</label>
+        <div id="pairsReadout" style="font-weight:800;font-size:20px;color:var(--ink);padding:2px 0"></div>
+        <p class="hint">Automatic: <b>one match for every 10 items</b> in stock. Add inventory to grow the board (min 1 match, max 25 = 50 cards). Never more matches than the number of distinct prizes currently in stock (each match needs its own prize).</p>
+        <p class="hint" id="gridHint"></p>
+      </div>
+
+      <!-- CARD BACK -->
+      <div class="section">
+        <h3>Card Back Design</h3>
+        <div class="seg" id="backSeg" style="margin-bottom:10px">
+          <button type="button" data-back="color">Solid accent</button>
+          <button type="button" data-back="image">Custom image</button>
+        </div>
+        <div id="backColorNote" class="hint">Cards use the accent color set below.</div>
+        <div id="backImageWrap" style="display:none">
+          <label class="fileBtn" id="backImgLabel">🖼️ Upload card-back image
+            <input type="file" id="backImage" accept="image/*">
+          </label>
+          <button class="btn secondary" id="backImgClear" style="display:none;margin-top:8px;padding:8px;font-size:12px">Remove image (use accent color)</button>
+          <p class="hint">Image is downscaled to 512px so it stays small and loads fast.</p>
+        </div>
+      </div>
+
+      <!-- PRIZES -->
+      <div class="section">
+        <h3>Prizes</h3>
+        <div id="slotList"></div>
+        <button class="btn" id="addPrize" style="margin-top:4px">➕ Add prize</button>
+        <p class="hint" id="invSummary"></p>
+      </div>
+
+      <!-- APPEARANCE -->
+      <div class="section">
+        <h3>Appearance</h3>
+        <label for="headlineInput">Headline</label>
+        <input type="text" id="headlineInput" />
+        <label for="subheadInput" style="margin-top:10px">Subtitle</label>
+        <input type="text" id="subheadInput" />
+        <label style="margin-top:12px">Accent color (card backs &amp; highlights)</label>
+        <input type="color" id="accentColor" />
+        <div class="row" style="margin:12px 0 8px">
+          <label style="display:flex;align-items:center;gap:6px;color:var(--ink);cursor:pointer">
+            <input type="radio" name="bgType" value="color"> Solid bg
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;color:var(--ink);cursor:pointer">
+            <input type="radio" name="bgType" value="image"> Image bg
+          </label>
+        </div>
+        <div id="bgColorWrap">
+          <label>Background color</label>
+          <input type="color" id="bgColor" />
+        </div>
+        <div id="bgImageWrap" style="display:none">
+          <label class="fileBtn" id="bgImgLabel">🖼️ Upload background image
+            <input type="file" id="bgImage" accept="image/*">
+          </label>
+        </div>
+      </div>
+
+      <!-- EXPORT / RESET -->
+      <div class="section">
+        <button class="btn" id="exportConfig">⬇ Export settings (config.json)</button>
+        <p class="hint">Downloads a settings file. Upload it into this game's folder in your repo so everyone who opens the link sees this exact setup.</p>
+        <button class="btn secondary" id="resetAll" style="margin-top:10px">Reset all settings</button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ============ WIN OVERLAY ============ -->
+  <div id="modal" title="Tap to continue">
+    <img id="prizeImg" alt="Prize" />
+    <div id="prizeFallback">
+      <div class="winKicker">🎉 Winner! 🎉</div>
+      <div class="prizeName" id="prizeName">YOU WON!</div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* =================================================================
+   MATCH & WIN — single-file kiosk game
+   Sections:
+     1. Config + localStorage persistence (+ shared publish)
+     2. Board build / render / layout
+     3. Flip + match game logic
+     4. Web Audio (procedural SFX)
+     5. Confetti particle system
+     6. Win state + modal
+     7. Admin panel wiring
+     8. Helpers + init
+   ================================================================= */
+
+/* ---------- constants ---------- */
+const STORE_KEY = "matchWinConfig_v1";
+const ITEMS_PER_MATCH = 10;                    // one set of matches (a pair) per this many items in stock
+const MAX_PAIRS = 25;                          // ceiling — 25 pairs = a 50-card grid (the largest layout)
+// Default prize colors (initial color for each prize; each is editable).
+const PALETTE = ["#ff6b6b","#08d9d6","#ffd93d","#a06bff","#3ddc84","#ff8c42","#ff5ea8","#4d9bff","#f9c74f","#43aa8b","#f94144","#577590"];
+
+/* ---------- DOM ---------- */
+const boardEl   = document.getElementById("board");
+const stageEl   = document.getElementById("stage");
+const conf      = document.getElementById("confetti");
+const cctx      = conf.getContext("2d");
+
+/* ---------- runtime state ---------- */
+let config;                    // persisted settings
+let cards = [];                // [{prizeIdx, el, matched}]
+let flipped = [];              // indices of currently face-up (unmatched) cards
+let locked = false;            // true while a mismatched pair is flipping back / during win
+let boardEmpty = false;        // true when no prizes have stock
+let gameState = "idle";        // idle | won
+const imgCache = {};
+
+/* =================================================================
+   1. CONFIG + PERSISTENCE
+   ================================================================= */
+function defaultConfig(){
+  const seed = [
+    ["Sticker Pack","⭐"], ["Keychain","🔑"], ["T-Shirt","👕"],
+    ["Gift Card","🎁"], ["Coffee Mug","☕"], ["Grand Prize","🏆"]
+  ];
+  const prizes = seed.map((s,i)=>({
+    name:s[0], icon:s[1], inventory:(i===5?3:5),
+    color:PALETTE[i % PALETTE.length], slotImg:"", prizeImg:""
+  }));
+  return {
+    prizes,
+    cardBack:{ type:"color", image:"" },
+    theme:{ type:"color", color:"#12172b", image:"" },
+    accent:"#ff4757",
+    headline:"Match & Win",
+    subhead:"Flip two cards — match a pair to win the prize!"
+  };
+}
+
+// Fill in any missing/older fields on a config object.
+function normalizeConfig(c){
+  if(!(c && Array.isArray(c.prizes) && c.prizes.length>=1)) return null;
+  delete c.pairs;              // match count is now derived from inventory, not stored
+  c.cardBack   = Object.assign({ type:"color", image:"" }, c.cardBack||{});
+  c.theme      = Object.assign({ type:"color", color:"#12172b", image:"" }, c.theme||{});
+  c.accent     = c.accent || "#ff4757";
+  c.headline   = (c.headline!=null) ? c.headline : "Match & Win";
+  c.subhead    = (c.subhead!=null) ? c.subhead : "Flip two cards — match a pair to win the prize!";
+  c.prizes.forEach((p,i)=>{
+    if(p.inventory == null) p.inventory = 5;
+    if(!p.color) p.color = PALETTE[i % PALETTE.length];
+    if(p.icon == null) p.icon = "";
+    if(p.slotImg == null) p.slotImg = "";
+    if(p.prizeImg == null) p.prizeImg = "";
+  });
+  return c;
+}
+
+const hadLocalConfig = (()=>{ try{ return !!localStorage.getItem(STORE_KEY); }catch(e){ return false; } })();
+
+function loadConfig(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ const c = normalizeConfig(JSON.parse(raw)); if(c) return c; }
+  }catch(e){ /* ignore corrupt storage */ }
+  return defaultConfig();
+}
+
+function saveConfig(){
+  config.updatedAt = Date.now();   // stamp so the newest version wins across devices
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(config)); }
+  catch(e){
+    console.warn("Could not persist config:", e);
+    alert("Settings are active for this session, but couldn't be saved permanently — the uploaded images are too large for local storage.");
+  }
+}
+
+/* ---- Shared publish (config.json committed to the repo) ----
+   Fetch the published config.json; whichever of (published, local draft) has the
+   newer updatedAt wins, so every visitor sees the latest published setup. */
+async function loadPublishedConfig(){
+  let published = null;
+  try{
+    const res = await fetch('config.json', { cache:'no-store' });
+    if(res.ok) published = normalizeConfig(await res.json());
+  }catch(e){ /* no published file / offline */ }
+  if(!published) return;
+  const localTs = hadLocalConfig ? (config.updatedAt || 0) : -1;   // no local draft → published wins
+  if((published.updatedAt || 0) >= localTs){
+    config = published;
+    applyAll();
+    buildBoard();
+  }
+}
+
+// Download the current setup as config.json for the manager to commit to the repo.
+function exportConfigFile(){
+  config.updatedAt = Date.now(); saveConfig();
+  const blob = new Blob([JSON.stringify(config)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'config.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+}
+
+/* Return (and cache) an Image object for a data URL, or null. */
+function getImg(dataURL){
+  if(!dataURL) return null;
+  if(imgCache[dataURL]) return imgCache[dataURL];
+  const img = new Image(); img.src = dataURL; imgCache[dataURL] = img;
+  return img;
+}
+
+/* =================================================================
+   2. BOARD BUILD / RENDER / LAYOUT
+   ================================================================= */
+/* Work out how many matches (pairs) the board should show, derived from stock:
+   one set of matches for every ITEMS_PER_MATCH items in inventory. Clamped to at
+   least 1 (so any stock is playable), the distinct in-stock prize count, and
+   MAX_PAIRS. Returns the details so the admin readout can explain the number. */
+function computePairs(){
+  const active   = config.prizes.filter(p => (parseInt(p.inventory)||0) > 0);
+  const distinct = active.length;
+  const totalInv = active.reduce((a,p)=> a + (parseInt(p.inventory)||0), 0);
+  const wanted   = Math.floor(totalInv / ITEMS_PER_MATCH);   // "one per 10 items"
+  const pairs    = distinct === 0 ? 0 : Math.max(1, Math.min(wanted, distinct, MAX_PAIRS));
+  return { pairs, wanted, totalInv, distinct };
+}
+
+/* Build a fresh board: pull DISTINCT in-stock prizes from the pool, pick as many
+   as the inventory-derived match count allows, make two cards each, and shuffle. */
+function buildBoard(){
+  flipped = []; locked = false; gameState = "idle";
+
+  const active = config.prizes
+    .map((p,idx)=>({ p, idx }))
+    .filter(o => (parseInt(o.p.inventory)||0) > 0);
+  boardEmpty = active.length === 0;
+  document.body.classList.toggle("board-empty", boardEmpty);
+
+  if(boardEmpty){ cards = []; boardEl.innerHTML = ""; return; }
+
+  const pairCount = computePairs().pairs;
+  const chosen = shuffle(active.slice()).slice(0, pairCount);
+
+  // Two cards per chosen prize, then shuffle the whole deck.
+  let deck = [];
+  chosen.forEach(o => { deck.push(o.idx); deck.push(o.idx); });
+  deck = shuffle(deck);
+
+  cards = deck.map(prizeIdx => ({ prizeIdx, matched:false, el:null }));
+  renderBoard();
+  layoutBoard();
+}
+
+function renderBoard(){
+  const frag = document.createDocumentFragment();
+  cards.forEach((c, i)=>{
+    const prize = config.prizes[c.prizeIdx];
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.i = i;
+
+    const back = document.createElement("div");
+    back.className = "face face-back";
+    back.innerHTML = '<span class="back-emblem">🃏</span>';
+
+    const front = document.createElement("div");
+    front.className = "face face-front";
+    front.style.background = hexA(prize.color || "#ffffff", 0.92);
+    const img = prize.slotImg;
+    if(img){
+      front.classList.add("has-img");
+      front.innerHTML = '<span class="prize-icon"><img src="'+escapeAttr(img)+'" alt=""></span>';
+    }else{
+      front.innerHTML =
+        '<span class="prize-icon">'+ (prize.icon ? escapeHtml(prize.icon) : "🎁") +'</span>' +
+        '<span class="prize-name">'+ escapeHtml(prize.name||"") +'</span>';
+    }
+
+    const inner = document.createElement("div");
+    inner.className = "card-inner";
+    inner.append(back, front);
+    card.appendChild(inner);
+    c.el = card;
+    frag.appendChild(card);
+  });
+  boardEl.replaceChildren(frag);
+}
+
+/* Size the grid so all cards fit inside the available stage area (both axes).
+   The column/row split is chosen to MAXIMIZE card size for the current screen
+   shape — so it lays out tall on a portrait kiosk (e.g. 2160x3840) and wide on a
+   landscape one, with no hard-coded orientation. Clean (no-empty-cell) grids are
+   preferred unless a ragged one is much larger (only matters for awkward counts
+   like 2x a prime). Works for any even count up to the 50-card max. */
+function layoutBoard(){
+  if(!cards.length) return;
+  const count = cards.length;
+  const gap = count > 24 ? 6 : count > 8 ? 10 : 14;   // tighter gaps as the board grows
+
+  const header = document.getElementById("header");
+  const padding = 24;
+  const availW = window.innerWidth  - padding*2;
+  const availH = window.innerHeight - (header ? header.offsetHeight : 0) - padding*2 - 14;
+
+  // Cards are 3:4 (w:h). Try every column count; keep the biggest that fits.
+  let clean = null, any = null;                       // best zero-empty vs best overall
+  for(let cols=1; cols<=count; cols++){
+    const rows  = Math.ceil(count / cols);
+    const byW   = (availW - gap*(cols-1)) / cols;
+    const byH   = ((availH - gap*(rows-1)) / rows) * (3/4);
+    const cardW = Math.min(byW, byH);
+    if(cardW <= 0) continue;
+    if(!any || cardW > any.cardW) any = { cols, rows, cardW };
+    if(cols*rows === count && (!clean || cardW > clean.cardW)) clean = { cols, rows, cardW };
+  }
+  const pick  = (clean && clean.cardW >= any.cardW * 0.8) ? clean : any;
+  const cardW = Math.max(24, Math.floor(pick.cardW));
+
+  boardEl.style.gap = gap + "px";
+  boardEl.style.gridTemplateColumns = "repeat(" + pick.cols + ", " + cardW + "px)";
+  boardEl.style.gridAutoRows = Math.round(cardW * 4/3) + "px";
+  boardEl.style.setProperty("--card-w", cardW + "px");   // face icon/name scale to card size
+}
+
+/* =================================================================
+   3. FLIP + MATCH LOGIC
+   ================================================================= */
+function flipCard(i){
+  if(gameState !== "idle" || locked || boardEmpty) return;
+  const c = cards[i];
+  if(!c || c.matched) return;
+  if(flipped.includes(i)) return;         // already face-up
+  if(flipped.length >= 2) return;
+
+  ensureAudio();                          // audio needs a user gesture
+  c.el.classList.add("flipped");
+  flipSound();
+  flipped.push(i);
+
+  if(flipped.length === 2) evaluatePair();
+}
+
+function evaluatePair(){
+  locked = true;
+  const [a, b] = flipped;
+  const match = cards[a].prizeIdx === cards[b].prizeIdx;
+
+  if(match){
+    // Success — this is the win. Highlight the pair, then reveal the prize.
+    cards[a].matched = cards[b].matched = true;
+    cards[a].el.classList.add("matched");
+    cards[b].el.classList.add("matched");
+    flipped = [];
+    matchChime();
+    setTimeout(()=> win(cards[a].prizeIdx), 550);
+  }else{
+    // Wrong — flip both back after a beat and let the player try again.
+    cards[a].el.classList.add("wrong");
+    cards[b].el.classList.add("wrong");
+    wrongBuzz();
+    setTimeout(()=>{
+      [a,b].forEach(idx=>{ cards[idx].el.classList.remove("flipped","wrong"); });
+      flipped = []; locked = false;
+    }, 850);
+  }
+}
+
+/* =================================================================
+   4. WEB AUDIO — procedural SFX
+   ================================================================= */
+let audioCtx = null, lastFlip = 0;
+function ensureAudio(){
+  if(!audioCtx){ const AC = window.AudioContext || window.webkitAudioContext; if(AC) audioCtx = new AC(); }
+  if(audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+function tone(freq, dur, type, vol, when){
+  if(!audioCtx) return;
+  const t = (when!=null?when:audioCtx.currentTime);
+  const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+  osc.type = type || "triangle";
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(vol||0.2, t+0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t); osc.stop(t+dur+0.02);
+}
+function flipSound(){
+  if(!audioCtx) return;
+  const t = performance.now(); if(t - lastFlip < 30) return; lastFlip = t;
+  tone(520 + Math.random()*160, 0.09, "triangle", 0.18);
+}
+function wrongBuzz(){ tone(180, 0.18, "sawtooth", 0.14); }
+function matchChime(){
+  if(!audioCtx) return;
+  [659.25, 880].forEach((f,i)=> tone(f, 0.18, "square", 0.2, audioCtx.currentTime + i*0.09));
+}
+function winChime(){
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+  [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f,i)=> tone(f, 0.35, "square", 0.22, now + i*0.11));
+  tone(1568, 0.5, "triangle", 0.16, now + 0.55);
+}
+
+/* =================================================================
+   5. CONFETTI PARTICLE SYSTEM
+   ================================================================= */
+let confettiParts = [];
+function sizeConfetti(){
+  const dpr = window.devicePixelRatio || 1;
+  conf.width  = window.innerWidth  * dpr;
+  conf.height = window.innerHeight * dpr;
+  cctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function burstConfetti(){
+  const colors = [config.accent||"#ff4757","#08d9d6","#ffd93d","#a06bff","#3ddc84","#ff8c42","#ffffff"];
+  const W = window.innerWidth;
+  confettiParts = [];
+  for(let i=0;i<240;i++){
+    confettiParts.push({
+      x: Math.random()*W, y: -20 - Math.random()*window.innerHeight*0.5,
+      vx:(Math.random()-0.5)*4, vy: 2 + Math.random()*5,
+      w: 6+Math.random()*8, h: 8+Math.random()*10,
+      rot: Math.random()*Math.PI, vr:(Math.random()-0.5)*0.3,
+      color: colors[(Math.random()*colors.length)|0]
+    });
+  }
+}
+function drawConfetti(){
+  if(!confettiParts.length){ cctx.clearRect(0,0,conf.width,conf.height); return; }
+  cctx.clearRect(0,0,window.innerWidth,window.innerHeight);
+  const H = window.innerHeight;
+  for(const p of confettiParts){
+    p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.rot += p.vr;
+    cctx.save(); cctx.translate(p.x,p.y); cctx.rotate(p.rot);
+    cctx.fillStyle = p.color; cctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+    cctx.restore();
+  }
+  confettiParts = confettiParts.filter(p => p.y < H + 40);
+}
+function confettiLoop(){ drawConfetti(); requestAnimationFrame(confettiLoop); }
+
+/* =================================================================
+   6. WIN STATE + MODAL
+   ================================================================= */
+const modal        = document.getElementById("modal");
+const prizeNameEl   = document.getElementById("prizeName");
+const prizeImgEl    = document.getElementById("prizeImg");
+const prizeFallback = document.getElementById("prizeFallback");
+let modalTimer = 0;
+
+function win(prizeIdx){
+  gameState = "won";
+  const prize = config.prizes[prizeIdx];
+  // Decrement this prize's inventory by 1 and persist (Standard D).
+  prize.inventory = Math.max(0, (parseInt(prize.inventory)||0) - 1);
+  saveConfig();
+  renderPrizeEditor();          // reflect the new count in the admin panel
+  winChime();
+
+  // Full-screen prize image (matches the wheel/Plinko). Fall back to name text.
+  const src = prize.prizeImg || prize.slotImg;
+  if(src){
+    prizeImgEl.src = src; prizeImgEl.style.display = "block"; prizeFallback.style.display = "none";
+  }else{
+    prizeNameEl.textContent = "YOU WON " + ((prize.name||"a prize").toUpperCase()) + "!";
+    prizeFallback.style.display = "block"; prizeImgEl.style.display = "none"; prizeImgEl.removeAttribute("src");
+  }
+
+  clearTimeout(modalTimer);
+  modalTimer = setTimeout(()=>{ modal.classList.add("show"); burstConfetti(); }, 350);
+}
+
+function playAgain(){
+  clearTimeout(modalTimer);
+  modal.classList.remove("show");
+  confettiParts = []; cctx.clearRect(0,0,conf.width,conf.height);
+  buildBoard();                 // reshuffle: any prize that just hit 0 leaves the pool
+}
+
+/* =================================================================
+   7. ADMIN PANEL WIRING
+   ================================================================= */
+const admin     = document.getElementById("admin");
+const slotListEl = document.getElementById("slotList");
+
+/* ---- Settings code lock (touch keypad; code 2005) ---- */
+let __settingsUnlocked = false;
+const SETTINGS_CODE = "2005";
+function requirePin(onSuccess){
+  if(__settingsUnlocked){ onSuccess(); return; }
+  let entry = "";
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);font-family:'Segoe UI',sans-serif;";
+  const panel = document.createElement("div");
+  panel.style.cssText = "background:#171a2b;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:24px;width:280px;max-width:88vw;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6);";
+  const title = document.createElement("div");
+  title.textContent = "Enter code"; title.style.cssText = "color:#fff;font-size:18px;font-weight:700;margin-bottom:12px;";
+  const dots = document.createElement("div");
+  dots.style.cssText = "color:#fff;font-size:28px;letter-spacing:10px;min-height:36px;margin-bottom:14px;font-family:monospace;";
+  const render = ()=> dots.textContent = entry.split("").map(()=>"•").join("") || "—";
+  render();
+  const pad = document.createElement("div");
+  pad.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px;";
+  const fail = ()=>{ entry=""; render(); title.textContent="Wrong code — try again"; title.style.color="#ff2e63"; };
+  const check = ()=>{ if(entry===SETTINGS_CODE){ __settingsUnlocked=true; ov.remove(); onSuccess(); } else fail(); };
+  ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].forEach(k=>{
+    const b = document.createElement("button"); b.textContent=k; b.type="button";
+    b.style.cssText = "padding:15px 0;font-size:19px;font-weight:700;border:0;border-radius:10px;color:#fff;cursor:pointer;background:"+((k==="⌫"||k==="OK")?"#2a3040":"#08d9d6")+";";
+    if(k!=="⌫"&&k!=="OK") b.style.color="#04121a";
+    b.onclick = ()=>{
+      if(k==="⌫") entry=entry.slice(0,-1);
+      else if(k==="OK") return check();
+      else if(entry.length<8) entry+=k;
+      render();
+      if(entry.length===SETTINGS_CODE.length) check();
+    };
+    pad.appendChild(b);
+  });
+  const cancel = document.createElement("button");
+  cancel.textContent="Cancel"; cancel.type="button";
+  cancel.style.cssText="margin-top:14px;background:none;border:0;color:#9aa4c0;font-size:14px;cursor:pointer;";
+  cancel.onclick = ()=> ov.remove();
+  ov.onclick = (e)=>{ if(e.target===ov) ov.remove(); };
+  panel.append(title, dots, pad, cancel); ov.appendChild(panel); document.body.appendChild(ov);
+}
+
+document.getElementById("gear").onclick = ()=>{
+  if(admin.classList.contains("open")) admin.classList.remove("open");   // tap again to close (no code)
+  else requirePin(()=> admin.classList.add("open"));                     // code required to open
+};
+document.getElementById("adminClose").onclick = ()=> admin.classList.remove("open");
+
+/* Read a File input, downscaling + compressing it so it fits in localStorage.
+   Caps the longest edge, picks the smaller of PNG (transparency) / JPEG.
+   Falls back to the raw file if the browser can't decode it. cb(dataURL). */
+function readFileAsDataURL(file, cb, maxEdge){
+  const MAX_EDGE = maxEdge || 512;
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    const img = new Image();
+    img.onload = ()=>{
+      let w = img.width, h = img.height;
+      if(Math.max(w,h) > MAX_EDGE){ const s = MAX_EDGE / Math.max(w,h); w = Math.round(w*s); h = Math.round(h*s); }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      let png = null, jpg = null;
+      try{ png = c.toDataURL("image/png"); }catch(e){}
+      try{ jpg = c.toDataURL("image/jpeg", 0.85); }catch(e){}
+      let out = fr.result;
+      if(png && (png.length <= 200000 || !jpg)) out = png;
+      else if(jpg) out = jpg;
+      else if(png) out = png;
+      cb(out);
+    };
+    img.onerror = ()=> cb(fr.result);
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+
+/* ---- Prize editor (full CRUD) ---- */
+function renderPrizeEditor(){
+  slotListEl.innerHTML = "";
+  config.prizes.forEach((p, i)=>{
+    const card = document.createElement("div");
+    card.className = "slotCard";
+    card.innerHTML = `
+      <div class="tagRow">
+        <span class="tag">Prize ${i+1}</span>
+        <button class="del" type="button" data-del="${i}">✕ Remove</button>
+      </div>
+      <label>Prize name</label>
+      <input type="text" data-i="${i}" data-k="name" value="${escapeAttr(p.name)}" />
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label>Icon (emoji)</label>
+          <input type="text" data-i="${i}" data-k="icon" maxlength="4" value="${escapeAttr(p.icon||"")}" />
+        </div>
+        <div>
+          <label>Inventory</label>
+          <input type="number" min="0" step="1" data-i="${i}" data-k="inventory" value="${p.inventory}" />
+        </div>
+      </div>
+      <label style="margin-top:8px">Card tint color</label>
+      <input type="color" data-i="${i}" data-k="color" value="${/^#/.test(p.color||'')?p.color:'#ff6b6b'}" />
+      <label class="fileBtn ${p.slotImg?'set':''}" style="margin-top:10px">
+        ${p.slotImg?'✓ Card-face image set':'🖼️ Card-face image (optional)'}
+        <input type="file" accept="image/*" data-i="${i}" data-k="slotImg">
+      </label>
+      <label class="fileBtn ${p.prizeImg?'set':''}">
+        ${p.prizeImg?'✓ Winner image set':'🏆 Winner pop-up image'}
+        <input type="file" accept="image/*" data-i="${i}" data-k="prizeImg">
+      </label>
+    `;
+    slotListEl.appendChild(card);
+  });
+
+  // text / number / color inputs
+  slotListEl.querySelectorAll('input[type=text],input[type=number],input[type=color]').forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const i = +e.target.dataset.i, k = e.target.dataset.k;
+      if(k === "inventory"){
+        config.prizes[i].inventory = Math.max(0, parseInt(e.target.value) || 0);
+        buildBoard();                          // stock change reshuffles the board live
+      }else{
+        config.prizes[i][k] = e.target.value;
+        if(k === "name" || k === "icon" || k === "color") buildBoard();
+      }
+      updateInvSummary();
+      saveConfig();
+    });
+  });
+  // image inputs (face thumbnail 512, winner pop-up 1400)
+  slotListEl.querySelectorAll('input[type=file]').forEach(inp=>{
+    inp.addEventListener("change", e=>{
+      const f = e.target.files[0]; if(!f) return;
+      const i = +e.target.dataset.i, k = e.target.dataset.k;
+      readFileAsDataURL(f, url=>{
+        config.prizes[i][k] = url; saveConfig(); renderPrizeEditor();
+        if(k === "slotImg") buildBoard();
+      }, k === "prizeImg" ? 1400 : 512);
+    });
+  });
+  // delete buttons
+  slotListEl.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const i = +btn.dataset.del;
+      if(config.prizes.length <= 1){ alert("Keep at least one prize."); return; }
+      config.prizes.splice(i,1);
+      renderPrizeEditor(); buildBoard(); updateInvSummary(); saveConfig();
+    });
+  });
+  updateInvSummary();
+}
+
+function updateInvSummary(){
+  const distinct = config.prizes.filter(p => (parseInt(p.inventory)||0) > 0).length;
+  const total = config.prizes.reduce((a,p)=> a + (parseInt(p.inventory)||0), 0);
+  document.getElementById("invSummary").textContent =
+    total > 0
+      ? `${distinct} prize${distinct===1?"":"s"} in stock, ${total} total. Each match wins a prize and drops its count by 1; a prize leaves the pool at 0.`
+      : "Everything is out of stock — set an inventory above 0 to bring a prize back.";
+  updateGridHint();
+}
+
+/* ---- Match-count readout (auto-derived from inventory) ---- */
+function updateGridHint(){
+  const { pairs, wanted, totalInv, distinct } = computePairs();
+  document.getElementById("pairsReadout").textContent =
+    distinct === 0 ? "—" : `${pairs} match${pairs===1?"":"es"}  (${pairs*2}-card grid)`;
+
+  const hint = document.getElementById("gridHint");
+  if(distinct === 0){ hint.textContent = "No prizes in stock — nothing to match yet."; return; }
+  let msg = `${totalInv} item${totalInv===1?"":"s"} in stock → ${wanted} match${wanted===1?"":"es"} at 1 per ${ITEMS_PER_MATCH}.`;
+  if(pairs !== wanted){
+    const reasons = [];
+    if(wanted < 1) reasons.push("rounded up to the 1-match minimum");
+    if(wanted > distinct) reasons.push(`limited to the ${distinct} distinct prize${distinct===1?"":"s"} in stock`);
+    if(wanted > MAX_PAIRS) reasons.push(`capped at the ${MAX_PAIRS}-match maximum`);
+    msg += ` Showing ${pairs} — ${reasons.join(", ")}.`;
+  }
+  hint.textContent = msg;
+}
+
+/* ---- Card-back design ---- */
+function syncBackControls(){
+  document.querySelectorAll("#backSeg button").forEach(b=>{
+    b.classList.toggle("active", b.dataset.back === config.cardBack.type);
+  });
+  const isImg = config.cardBack.type === "image";
+  document.getElementById("backColorNote").style.display = isImg ? "none" : "";
+  document.getElementById("backImageWrap").style.display = isImg ? "" : "none";
+  const label = document.getElementById("backImgLabel");
+  label.classList.toggle("set", !!config.cardBack.image);
+  label.firstChild.textContent = config.cardBack.image ? "✓ Card-back image set " : "🖼️ Upload card-back image ";
+  document.getElementById("backImgClear").style.display = config.cardBack.image ? "" : "none";
+  applyCardBack();
+}
+function applyCardBack(){
+  const useImg = config.cardBack.type === "image" && config.cardBack.image;
+  document.body.classList.toggle("back-image", !!useImg);
+  document.querySelectorAll(".face-back").forEach(el=>{
+    el.style.backgroundImage = useImg
+      ? 'url("'+config.cardBack.image+'")'
+      : 'radial-gradient(120% 120% at 30% 20%, rgba(255,255,255,.22), transparent 55%)';
+  });
+}
+document.getElementById("backSeg").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-back]"); if(!b) return;
+  config.cardBack.type = b.dataset.back;
+  syncBackControls(); saveConfig();
+});
+document.getElementById("backImage").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  readFileAsDataURL(f, url=>{ config.cardBack.image = url; config.cardBack.type = "image"; syncBackControls(); saveConfig(); }, 512);
+});
+document.getElementById("backImgClear").addEventListener("click", ()=>{
+  config.cardBack.image = ""; syncBackControls(); saveConfig();
+});
+
+/* ---- Appearance: headline, accent, background ---- */
+const bgColorEl = document.getElementById("bgColor");
+function applyTheme(){
+  if(config.theme.type === "image" && config.theme.image){
+    document.body.style.background = `center/cover no-repeat fixed url("${config.theme.image}")`;
+  }else{
+    document.body.style.background = config.theme.color;
+  }
+}
+function applyAccent(){ document.documentElement.style.setProperty("--accent", config.accent || "#ff4757"); }
+function applyText(){
+  document.getElementById("headline").textContent = config.headline || "";
+  const sub = document.getElementById("subhead");
+  sub.textContent = config.subhead || "";
+  sub.style.display = config.subhead ? "" : "none";
+}
+function applyAll(){
+  applyText(); applyAccent(); applyTheme();
+  syncBackControls(); syncAppearanceControls(); renderPrizeEditor(); updateGridHint();
+}
+function syncAppearanceControls(){
+  document.getElementById("headlineInput").value = config.headline || "";
+  document.getElementById("subheadInput").value = config.subhead || "";
+  document.getElementById("accentColor").value = /^#/.test(config.accent||"") ? config.accent : "#ff4757";
+  bgColorEl.value = /^#/.test(config.theme.color) ? config.theme.color : "#12172b";
+  document.querySelectorAll('input[name=bgType]').forEach(r=> r.checked = (r.value === config.theme.type));
+  document.getElementById("bgColorWrap").style.display = config.theme.type === "color" ? "" : "none";
+  document.getElementById("bgImageWrap").style.display = config.theme.type === "image" ? "" : "none";
+  const label = document.getElementById("bgImgLabel");
+  label.classList.toggle("set", !!config.theme.image);
+  label.firstChild.textContent = config.theme.image ? "✓ Background image set " : "🖼️ Upload background image ";
+}
+document.getElementById("headlineInput").addEventListener("input", e=>{ config.headline = e.target.value; applyText(); saveConfig(); });
+document.getElementById("subheadInput").addEventListener("input", e=>{ config.subhead = e.target.value; applyText(); layoutBoard(); saveConfig(); });
+document.getElementById("accentColor").addEventListener("input", e=>{ config.accent = e.target.value; applyAccent(); applyCardBack(); saveConfig(); });
+bgColorEl.addEventListener("input", ()=>{ config.theme.color = bgColorEl.value; applyTheme(); saveConfig(); });
+document.querySelectorAll('input[name=bgType]').forEach(r=>{
+  r.addEventListener("change", ()=>{ config.theme.type = r.value; syncAppearanceControls(); applyTheme(); saveConfig(); });
+});
+document.getElementById("bgImage").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  readFileAsDataURL(f, url=>{ config.theme.image = url; config.theme.type = "image"; syncAppearanceControls(); applyTheme(); saveConfig(); }, 1400);
+});
+
+/* ---- Add prize / export / reset ---- */
+document.getElementById("addPrize").addEventListener("click", ()=>{
+  const i = config.prizes.length;
+  config.prizes.push({ name:"Prize "+(i+1), icon:"🎁", inventory:5, color:PALETTE[i % PALETTE.length], slotImg:"", prizeImg:"" });
+  renderPrizeEditor(); buildBoard(); updateInvSummary(); saveConfig();
+});
+document.getElementById("exportConfig").addEventListener("click", exportConfigFile);
+document.getElementById("resetAll").addEventListener("click", ()=>{
+  if(!confirm("Reset all prizes, theme and settings to defaults?")) return;
+  config = defaultConfig(); saveConfig(); applyAll(); buildBoard();
+});
+
+/* =================================================================
+   8. HELPERS + INIT
+   ================================================================= */
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]] = [arr[j],arr[i]]; }
+  return arr;
+}
+function hexA(hex,a){
+  const h = String(hex||"").replace("#","");
+  if(!/^[0-9a-fA-F]{3,6}$/.test(h)) return `rgba(255,255,255,${a})`;
+  const n = parseInt(h.length===3 ? h.split("").map(c=>c+c).join("") : h, 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+function escapeAttr(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+
+function init(){
+  config = loadConfig();
+  sizeConfetti();
+
+  applyAll();
+  buildBoard();
+
+  // Card taps: touchstart for lag-free response, click as fallback. Game state
+  // guards make a double-fire harmless (an already-flipped/locked card is ignored).
+  let suppressClick = false;
+  boardEl.addEventListener("touchstart", e=>{
+    const card = e.target.closest(".card"); if(!card) return;
+    suppressClick = true; setTimeout(()=> suppressClick = false, 400);
+    flipCard(+card.dataset.i);
+  }, { passive:true });
+  boardEl.addEventListener("click", e=>{
+    if(suppressClick) return;
+    const card = e.target.closest(".card"); if(!card) return;
+    flipCard(+card.dataset.i);
+  });
+
+  // Tap anywhere on the win overlay to dismiss and reshuffle.
+  modal.addEventListener("click", playAgain);
+  modal.addEventListener("touchstart", e=>{ e.preventDefault(); playAgain(); }, { passive:false });
+
+  window.addEventListener("resize", ()=>{ sizeConfetti(); layoutBoard(); });
+
+  confettiLoop();
+  loadPublishedConfig();   // adopt the repo's published config.json if it's newer
+}
+init();
+</script>
+</body>
+</html>
