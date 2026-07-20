@@ -76,6 +76,27 @@
   }
   #startSettings:hover{ color:var(--ink); border-color:var(--accent); background:rgba(57,211,83,.08); }
 
+  /* Leaderboard overlay */
+  #leaderboard{ z-index:72; }
+  .lbTitle{ font-size:clamp(24px,6vw,46px); font-weight:900; color:#fff; text-shadow:3px 3px 0 rgba(0,0,0,.6); margin-bottom:4px; }
+  #lbEntry{ margin:8px 0 2px; }
+  .lbNew{ color:var(--accent); font-weight:900; font-size:clamp(15px,3.4vw,24px); margin-bottom:10px; text-shadow:1px 1px 0 rgba(0,0,0,.6); }
+  .lbRow{ display:flex; gap:10px; justify-content:center; }
+  #lbName{ width:min(320px,70vw); padding:12px 14px; border-radius:10px; border:1px solid var(--line); background:#0e1122; color:var(--ink); font-size:18px; text-align:center; }
+  #lbName:focus{ border-color:var(--accent); outline:none; }
+  #lbSave{ padding:12px 22px; border:0; border-radius:10px; background:var(--accent); color:#04121a; font-weight:900; letter-spacing:1px; cursor:pointer; }
+  #lbList{ list-style:none; margin:18px 0 0; padding:0; width:min(460px,88vw); }
+  #lbList li{ display:flex; align-items:center; gap:12px; padding:12px 16px; margin-bottom:8px; border-radius:10px; background:rgba(255,255,255,.05); border:1px solid var(--line); font-size:clamp(15px,3vw,20px); }
+  #lbList li.you{ background:rgba(57,211,83,.16); border-color:var(--accent); }
+  #lbList li.empty{ justify-content:center; color:var(--muted); }
+  #lbList .rk{ font-weight:900; color:var(--muted); width:28px; text-align:center; }
+  #lbList .nm{ flex:1; text-align:left; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #lbList .nm .ph{ color:var(--muted); font-weight:600; }
+  #lbList .mt{ font-weight:800; color:var(--accent); white-space:nowrap; }
+  #lbNote{ margin-top:12px; color:#cfd6f5; font-size:clamp(12px,2.4vw,15px); min-height:1em; }
+  #lbPlay{ margin-top:22px; background:var(--accent); color:#04121a; border:0; padding:14px 30px; border-radius:12px; font-size:clamp(15px,3vw,20px); font-weight:900; letter-spacing:1px; cursor:pointer; }
+  #lbPlay:active{ transform:scale(.96); }
+
   #empty{
     position:fixed; inset:0; z-index:5; display:none;
     align-items:center; justify-content:center; flex-direction:column;
@@ -315,6 +336,12 @@
       </div>
 
       <div class="section">
+        <h3>Leaderboard</h3>
+        <button class="btn secondary" id="resetLb">🏆 Reset leaderboard (clear scores)</button>
+        <p class="hint">Clears the top-5 high scores. Scores are stored per device on this kiosk and are <b>not</b> part of the exported config.json.</p>
+      </div>
+
+      <div class="section">
         <button class="btn" id="exportConfig">⬇ Export settings (config.json)</button>
         <p class="hint">Downloads a settings file. Upload it into this game’s folder in your repo so everyone who opens the link sees this exact setup.</p>
         <button class="btn secondary" id="resetAll" style="margin-top:10px">Reset all settings</button>
@@ -330,6 +357,15 @@
       <div class="winKicker" id="winKicker">🏆 Tier reached!</div>
       <div class="prizeName" id="prizeName">YOU WON!</div>
     </div>
+  </div>
+
+  <!-- ============================ LEADERBOARD ============================ -->
+  <div id="leaderboard" class="overlay">
+    <div class="lbTitle pix">🏆 Top Climbers</div>
+    <div id="lbEntry"></div>
+    <ol id="lbList"></ol>
+    <div id="lbNote"></div>
+    <button id="lbPlay" class="pix" type="button">▶ Play again</button>
   </div>
 
   <audio id="bgm" loop></audio>
@@ -409,11 +445,25 @@ let cameraY = 0;
 let startY = 0;
 let maxClimb = 0;            // world px climbed (>=0)
 let liveTier = 0;
-let gameState = "ready";     // ready | playing | reveal | miss
+let gameState = "ready";     // ready | playing | reveal | miss | leaderboard
 let moveDir = 0;             // -1 | 0 | 1 (keyboard/touch/tilt combined target)
 let tiltDir = 0;
 let heldSide = 0;
 const imgCache = {};
+
+let pendingRun = { metres:0, tier:0 };   // the just-ended run, fed to the leaderboard
+let lbPending  = null;                   // {metres,tier,name,saved,ts} while a top-5 name is being entered
+
+/* Leaderboard is per-kiosk local data — NOT part of config.json (so exporting the
+   config doesn't ship one device's scores to everyone, and adopting a published
+   config doesn't wipe local scores). */
+const LB_KEY = "lvt_retro-jump_leaderboard_v1";
+let leaderboard = (function(){
+  try{ const raw=localStorage.getItem(LB_KEY); if(raw){ const a=JSON.parse(raw); if(Array.isArray(a)) return a.slice(0,5); } }catch(e){}
+  return [];
+})();
+function saveLeaderboard(){ try{ localStorage.setItem(LB_KEY, JSON.stringify(leaderboard.slice(0,5))); }catch(e){} }
+function lbQualifies(m){ return m>0 && (leaderboard.length<5 || m > leaderboard[leaderboard.length-1].metres); }
 
 /* =================================================================
    1. CONFIG + PERSISTENCE + SHARED PUBLISHING
@@ -892,6 +942,7 @@ function endRun(){
   fallSfx();
   updateHud();
   const reached = tierForMetres(metres());
+  pendingRun = { metres:metres(), tier:reached };   // recorded for the leaderboard (shown after the result screen)
   if(reached === 0){                              // fell before unlocking Tier 1 → no prize
     document.getElementById("missSub").textContent =
       "You reached " + metres() + " m — climb to " + config.tiers.t1 + " m to unlock Tier 1 and win a prize.";
@@ -944,9 +995,102 @@ function startGame(){
 function playAgain(){
   modal.classList.remove("show");
   document.getElementById("miss").classList.remove("show");
+  document.getElementById("leaderboard").classList.remove("show");
+  lbPending = null;
   confettiParts=[]; cctx.clearRect(0,0,conf.width,conf.height);
   if(totalInventory() <= 0){ document.getElementById("empty").classList.add("show"); gameState="ready"; document.getElementById("start").classList.add("show"); return; }
   startGame();
+}
+
+/* =================================================================
+   7b. LEADERBOARD (shown after the win pop-up / game-over is dismissed)
+   ================================================================= */
+const lbEl      = document.getElementById("leaderboard");
+const lbEntryEl = document.getElementById("lbEntry");
+const lbListEl  = document.getElementById("lbList");
+const lbNoteEl  = document.getElementById("lbNote");
+const lbPlayEl  = document.getElementById("lbPlay");
+
+function showLeaderboard(){
+  modal.classList.remove("show");
+  document.getElementById("miss").classList.remove("show");
+  confettiParts=[]; cctx.clearRect(0,0,conf.width,conf.height);
+  gameState = "leaderboard";
+  lbPending = lbQualifies(pendingRun.metres)
+    ? { metres:pendingRun.metres, tier:pendingRun.tier, name:"", saved:false, ts:0 }
+    : null;
+  renderLeaderboard();
+  lbEl.classList.add("show");
+  const inp = document.getElementById("lbName");
+  if(inp){ try{ inp.focus(); }catch(e){} }
+}
+
+// Rows to display: existing board, plus a preview of the not-yet-saved qualifying run.
+function lbRows(){
+  let rows = leaderboard.map(e => ({
+    name:e.name, metres:e.metres, tier:e.tier, ts:e.ts,
+    you: !!(lbPending && lbPending.saved && e.ts === lbPending.ts)
+  }));
+  if(lbPending && !lbPending.saved){
+    rows.push({ name:lbPending.name, metres:lbPending.metres, tier:lbPending.tier, ts:0, you:true, pending:true });
+    rows.sort((a,b)=> b.metres - a.metres);
+  }
+  return rows.slice(0,5);
+}
+
+function renderLeaderboard(){
+  const rows = lbRows();
+  lbListEl.innerHTML = rows.length ? rows.map((e,i)=>{
+    const medal = e.tier ? TIER_META[e.tier].emoji : "";
+    const nm = e.pending
+      ? (e.name ? escapeHtml(e.name) : '<span class="ph">— your name —</span>')
+      : escapeHtml(e.name || "Player");
+    return `<li class="${e.you?'you':''}"><span class="rk">${i+1}</span><span class="nm">${nm}</span><span class="mt">${e.metres} m ${medal}</span></li>`;
+  }).join("") : '<li class="empty">No scores yet — be the first!</li>';
+
+  if(lbPending && !lbPending.saved){
+    // qualifying, awaiting a name
+    lbEntryEl.style.display = "";
+    lbEntryEl.innerHTML =
+      `<div class="lbNew pix">🎉 New High Score — ${lbPending.metres} m!</div>` +
+      `<div class="lbRow"><input id="lbName" type="text" maxlength="14" placeholder="Enter your name" value="${escapeHtml(lbPending.name)}" />` +
+      `<button id="lbSave" class="pix" type="button">Save</button></div>`;
+    lbNoteEl.textContent = "";
+    lbPlayEl.style.display = "none";
+    const inp = document.getElementById("lbName");
+    inp.addEventListener("input", ()=>{
+      lbPending.name = inp.value;
+      const cell = lbListEl.querySelector("li.you .nm");
+      if(cell) cell.innerHTML = inp.value ? escapeHtml(inp.value) : '<span class="ph">— your name —</span>';
+    });
+    inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); commitPending(); } });
+    document.getElementById("lbSave").addEventListener("click", commitPending);
+  }else{
+    lbEntryEl.style.display = "none";
+    lbEntryEl.innerHTML = "";
+    lbPlayEl.style.display = "";
+    if(lbPending && lbPending.saved){
+      lbNoteEl.textContent = "Score saved!";
+    }else{
+      const need = leaderboard.length >= 5 ? leaderboard[4].metres + 1 : 0;
+      lbNoteEl.textContent = pendingRun.metres > 0
+        ? "You reached " + pendingRun.metres + " m." + (need ? " Top climbers need " + need + " m." : "")
+        : "";
+    }
+  }
+}
+
+function commitPending(){
+  if(!lbPending || lbPending.saved) return;
+  const inp = document.getElementById("lbName");
+  const name = (inp && inp.value.trim()) ? inp.value.trim().slice(0,14) : "Player";
+  const ts = Date.now();
+  leaderboard.push({ name, metres:lbPending.metres, tier:lbPending.tier, ts });
+  leaderboard.sort((a,b)=> b.metres - a.metres || (a.ts||0) - (b.ts||0));
+  leaderboard = leaderboard.slice(0,5);
+  saveLeaderboard();
+  lbPending.name = name; lbPending.saved = true; lbPending.ts = ts;
+  renderLeaderboard();
 }
 
 /* =================================================================
@@ -1200,6 +1344,14 @@ musicToggle.addEventListener("click", ()=>{
 });
 musicVol.addEventListener("input", ()=>{ config.volume=parseFloat(musicVol.value); bgm.volume=config.volume; saveConfig(); });
 
+/* ---- leaderboard reset ---- */
+document.getElementById("resetLb").addEventListener("click", ()=>{
+  if(!confirm("Clear the leaderboard? This removes all top-5 scores on this device.")) return;
+  leaderboard = []; saveLeaderboard();
+  if(gameState==="leaderboard"){ lbPending=null; renderLeaderboard(); }
+  alert("Leaderboard cleared.");
+});
+
 /* ---- export / reset ---- */
 document.getElementById("exportConfig").addEventListener("click", exportConfigFile);
 document.getElementById("resetAll").addEventListener("click", ()=>{
@@ -1280,7 +1432,7 @@ function recomputeMove(){
 window.addEventListener("keydown", e=>{
   if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A"){ keys.left=true; recomputeMove(); if(gameState==="ready") startGame(); }
   else if(e.key==="ArrowRight"||e.key==="d"||e.key==="D"){ keys.right=true; recomputeMove(); if(gameState==="ready") startGame(); }
-  else if(e.key===" "||e.key==="Enter"){ if(gameState==="ready") startGame(); else if(gameState==="reveal"||gameState==="miss") playAgain(); }
+  else if(e.key===" "||e.key==="Enter"){ if(gameState==="ready") startGame(); else if(gameState==="reveal"||gameState==="miss") showLeaderboard(); }
 });
 window.addEventListener("keyup", e=>{
   if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A"){ keys.left=false; recomputeMove(); }
@@ -1292,7 +1444,7 @@ function onDown(clientX){
   if(admin.classList.contains("open")) return;
   ensureAudio();
   if(gameState==="ready"){ startGame(); heldSide=pointerSide(clientX); recomputeMove(); return; }
-  if(gameState==="reveal"||gameState==="miss"){ playAgain(); return; }
+  if(gameState==="reveal"||gameState==="miss"){ showLeaderboard(); return; }
   if(gameState==="playing"){ heldSide=pointerSide(clientX); recomputeMove(); }
 }
 function onMove(clientX){ if(gameState==="playing" && heldSide!==0){ heldSide=pointerSide(clientX); recomputeMove(); } }
@@ -1312,7 +1464,9 @@ document.getElementById("startSettings").addEventListener("click", e=>{
   e.stopPropagation();
   requirePin(()=> admin.classList.add("open"));
 });
-modal.addEventListener("click", ()=>{ if(gameState==="reveal") playAgain(); });
+modal.addEventListener("click", ()=>{ if(gameState==="reveal") showLeaderboard(); });
+// Leaderboard "Play again" button (its own control so the name input isn't dismissed by a stray tap).
+lbPlayEl.addEventListener("click", playAgain);
 
 let _lastT = 0, _acc = 0;
 function loop(ts){
