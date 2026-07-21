@@ -647,7 +647,10 @@ function decelStep(remaining, totalSteps, target){
 function landOn(target){
   highlight(target);
   tileEls[target].classList.add("win");
-  applyOutcome(S.board[target]);
+  // Hold on the landed square for a beat so the player can clearly see where it
+  // stopped before the result overlay (winner pop-up / whammy) covers the screen.
+  S.phase="landed";
+  setTimeout(()=>applyOutcome(S.board[target]), 1000);
 }
 
 /* ==========================================================================
