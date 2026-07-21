@@ -61,41 +61,43 @@
   /* ---------- HUD ---------- */
   #hud{position:absolute; top:0; left:0; right:0; z-index:20; pointer-events:none;
      display:flex; justify-content:space-between; align-items:flex-start;
-     padding:calc(env(safe-area-inset-top) + 14px) 16px 0 16px; gap:10px;}
-  .hudPill{background:rgba(8,12,24,.72); border:1.5px solid var(--accent);
-     border-radius:16px; padding:8px 14px; backdrop-filter:blur(6px); min-width:96px; text-align:center;}
-  .hudPill .lab{font-size:11px; letter-spacing:.14em; text-transform:uppercase; opacity:.7;}
-  .hudPill .val{font-size:26px; font-weight:800; line-height:1.05;}
+     padding:calc(env(safe-area-inset-top) + 1.6vmin) 2vmin 0 2vmin; gap:1.4vmin;}
+  .hudPill{background:rgba(8,12,24,.72); border:0.25vmin solid var(--accent);
+     border-radius:2.2vmin; padding:clamp(6px,1.2vmin,22px) clamp(10px,2vmin,34px); backdrop-filter:blur(6px);
+     min-width:clamp(88px,14vmin,240px); text-align:center;}
+  .hudPill .lab{font-size:clamp(10px,1.5vmin,26px); letter-spacing:.14em; text-transform:uppercase; opacity:.7;}
+  .hudPill .val{font-size:clamp(24px,4.4vmin,80px); font-weight:800; line-height:1.05;}
   .hudPill.time.low .val{color:#ff5b5b;}
-  #title{position:absolute; top:calc(env(safe-area-inset-top) + 16px); left:50%; transform:translateX(-50%);
-     z-index:19; font-size:15px; font-weight:800; letter-spacing:.22em; text-transform:uppercase; text-align:center;
-     text-shadow:0 2px 10px rgba(0,0,0,.8); pointer-events:none; opacity:.92; max-width:60vw;}
+  #title{position:absolute; top:calc(env(safe-area-inset-top) + 1.8vmin); left:50%; transform:translateX(-50%);
+     z-index:19; font-size:clamp(14px,3vmin,60px); font-weight:800; letter-spacing:.2em; text-transform:uppercase; text-align:center;
+     text-shadow:0 2px 10px rgba(0,0,0,.8); pointer-events:none; opacity:.92; max-width:70vw;}
 
   /* ---------- Overlays ---------- */
   .overlay{position:absolute; top:0; right:0; bottom:0; left:0; z-index:30; display:flex; flex-direction:column;
-     align-items:center; justify-content:center; text-align:center; padding:24px;
+     align-items:center; justify-content:center; text-align:center; padding:4vmin;
      background:radial-gradient(80% 80% at 50% 45%, rgba(6,10,22,.62), rgba(2,4,10,.9));}
   .overlay.hidden{display:none;}
-  .bigTitle{font-size:min(11vw,52px); font-weight:900; letter-spacing:.04em; margin:0 0 6px;
+  .bigTitle{font-size:clamp(30px,8vmin,180px); font-weight:900; letter-spacing:.04em; margin:0 0 1.2vmin;
      text-shadow:0 0 30px rgba(30,111,255,.55);}
   .bigTitle .glow{color:var(--accent);}
-  .sub{font-size:16px; opacity:.85; margin:0 0 26px; max-width:520px;}
+  .sub{font-size:clamp(15px,2.4vmin,46px); opacity:.85; margin:0 0 4vmin; max-width:min(92%,1100px); line-height:1.35;}
   .btn{pointer-events:auto; cursor:pointer; border:none; border-radius:999px; background:var(--accent); color:#fff;
-     font-weight:800; font-size:20px; padding:16px 44px; letter-spacing:.05em; box-shadow:0 10px 30px rgba(0,0,0,.5);
-     text-transform:uppercase;}
+     font-weight:800; font-size:clamp(18px,3.4vmin,64px); padding:clamp(14px,2.6vmin,48px) clamp(40px,6.4vmin,120px);
+     letter-spacing:.05em; box-shadow:0 10px 30px rgba(0,0,0,.5); text-transform:uppercase;}
   .btn:active{transform:scale(.97);}
-  .tiers{display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin:8px 0 28px; max-width:640px;}
-  .tierCard{background:rgba(10,16,30,.7); border:1.5px solid rgba(120,150,220,.25); border-radius:14px;
-     padding:10px 14px; min-width:104px; display:flex; flex-direction:column; align-items:center; gap:4px;}
-  .tierCard .ic{width:40px; height:40px; display:flex; align-items:center; justify-content:center; font-size:30px;}
-  .tierCard .ic img{width:40px; height:40px; object-fit:contain;}
-  .tierCard .nm{font-size:13px; font-weight:700;}
-  .tierCard .th{font-size:11px; opacity:.7; letter-spacing:.06em; text-transform:uppercase;}
-  .tierCard .qty{font-size:10px; opacity:.55;}
+  .tiers{display:flex; flex-wrap:wrap; gap:1.6vmin; justify-content:center; margin:1.4vmin 0 4vmin; max-width:min(96%,1400px);}
+  .tierCard{background:rgba(10,16,30,.7); border:0.25vmin solid rgba(120,150,220,.25); border-radius:2.2vmin;
+     padding:clamp(10px,1.8vmin,32px) clamp(14px,2.4vmin,40px); min-width:clamp(104px,17vmin,300px);
+     display:flex; flex-direction:column; align-items:center; gap:0.7vmin;}
+  .tierCard .ic{width:clamp(40px,6.4vmin,120px); height:clamp(40px,6.4vmin,120px); display:flex; align-items:center; justify-content:center; font-size:clamp(30px,5vmin,96px);}
+  .tierCard .ic img{width:100%; height:100%; object-fit:contain;}
+  .tierCard .nm{font-size:clamp(13px,2.2vmin,42px); font-weight:700;}
+  .tierCard .th{font-size:clamp(11px,1.7vmin,32px); opacity:.7; letter-spacing:.06em; text-transform:uppercase;}
+  .tierCard .qty{font-size:clamp(10px,1.4vmin,26px); opacity:.55;}
   .tierCard.out{opacity:.35;}
-  .scoreBig{font-size:min(24vw,150px); font-weight:900; line-height:.9; color:var(--accent);
-     text-shadow:0 0 40px rgba(30,111,255,.5); margin:6px 0;}
-  .caughtLbl{font-size:16px; letter-spacing:.18em; text-transform:uppercase; opacity:.7;}
+  .scoreBig{font-size:clamp(90px,26vmin,560px); font-weight:900; line-height:.9; color:var(--accent);
+     text-shadow:0 0 40px rgba(30,111,255,.5); margin:1vmin 0;}
+  .caughtLbl{font-size:clamp(16px,2.6vmin,50px); letter-spacing:.18em; text-transform:uppercase; opacity:.7;}
 
   /* ---------- Winner reveal ---------- */
   #winner{position:fixed; top:0; right:0; bottom:0; left:0; z-index:60; display:none; background:rgba(0,0,0,.94);
@@ -104,18 +106,19 @@
   #winner img{width:100vw; height:100vh; height:100dvh; object-fit:contain; animation:winPop .5s cubic-bezier(.2,1.2,.4,1);}
   #winnerText{position:absolute; top:0; right:0; bottom:0; left:0; display:flex; flex-direction:column;
      align-items:center; justify-content:center; text-align:center; padding:24px;}
-  #winnerText .wt{font-size:min(12vw,64px); font-weight:900; color:var(--accent); animation:winPop .5s ease;}
-  #winnerText .ws{font-size:18px; opacity:.8; margin-top:10px; letter-spacing:.14em; text-transform:uppercase;}
+  #winnerText .wt{font-size:clamp(40px,10vmin,200px); font-weight:900; color:var(--accent); animation:winPop .5s ease;}
+  #winnerText .ws{font-size:clamp(16px,2.6vmin,48px); opacity:.8; margin-top:1.4vmin; letter-spacing:.14em; text-transform:uppercase;}
   @keyframes winPop{0%{transform:scale(.3); opacity:0}100%{transform:scale(1); opacity:1}}
   #confetti{position:fixed; top:0; right:0; bottom:0; left:0; z-index:61; pointer-events:none; display:none;}
   #confetti.show{display:block;}
-  .tapHint{position:absolute; bottom:calc(env(safe-area-inset-bottom) + 24px); left:0; right:0; text-align:center;
-     font-size:14px; letter-spacing:.2em; text-transform:uppercase; opacity:.6;}
+  .tapHint{position:absolute; bottom:calc(env(safe-area-inset-bottom) + 3vmin); left:0; right:0; text-align:center;
+     font-size:clamp(14px,2.2vmin,42px); letter-spacing:.2em; text-transform:uppercase; opacity:.6;}
 
   /* ---------- Gear / keypad / admin ---------- */
-  #gear{position:absolute; top:calc(env(safe-area-inset-top) + 10px); right:10px; z-index:40; width:44px; height:44px;
-     border-radius:50%; border:none; cursor:pointer; background:rgba(10,14,26,.55); color:#fff; font-size:22px;
-     line-height:44px; text-align:center; backdrop-filter:blur(4px);}
+  #gear{position:absolute; top:calc(env(safe-area-inset-top) + 1.2vmin); right:1.2vmin; z-index:40;
+     width:clamp(44px,7vmin,120px); height:clamp(44px,7vmin,120px);
+     border-radius:50%; border:none; cursor:pointer; background:rgba(10,14,26,.55); color:#fff;
+     font-size:clamp(22px,3.6vmin,60px); line-height:clamp(44px,7vmin,120px); text-align:center; backdrop-filter:blur(4px);}
   #gear:active{transform:scale(.94);}
   .modal{position:fixed; top:0; right:0; bottom:0; left:0; z-index:80; display:none; align-items:center; justify-content:center;
      background:rgba(0,0,0,.6); backdrop-filter:blur(3px); padding:16px;}
@@ -163,6 +166,30 @@
      background:#ffcf5b; border:2px solid #000; display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer;}
   .modeBtns{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
   .modeBtns .btnMini.on{outline:2px solid var(--accent);}
+
+  /* ---------- Leaderboard ---------- */
+  #leaderboard{ z-index:31; }
+  .lbTitle{ font-size:clamp(26px,5.5vmin,120px); font-weight:900; margin:0 0 2vmin; letter-spacing:.03em;
+     text-shadow:0 0 30px rgba(30,111,255,.5); }
+  .lbNew{ color:var(--accent); font-weight:900; font-size:clamp(16px,3vmin,56px); margin-bottom:1.4vmin; text-shadow:0 0 20px rgba(30,111,255,.5); }
+  .lbRow{ display:flex; gap:1.4vmin; justify-content:center; align-items:center; margin-bottom:1vmin; flex-wrap:wrap; }
+  #lbName{ width:min(64vw,560px); padding:clamp(10px,1.6vmin,28px) clamp(12px,2vmin,30px); border-radius:1.4vmin;
+     border:0.25vmin solid #2a3450; background:#0a0e1a; color:#fff; font-size:clamp(16px,2.8vmin,46px); text-align:center; }
+  #lbName:focus{ border-color:var(--accent); outline:none; }
+  #lbSave{ padding:clamp(10px,1.6vmin,28px) clamp(20px,3vmin,52px); border:0; border-radius:1.4vmin; background:var(--accent);
+     color:#fff; font-weight:900; letter-spacing:1px; cursor:pointer; font-size:clamp(15px,2.6vmin,42px); }
+  #lbSave:active{ transform:scale(.96); }
+  #lbList{ list-style:none; margin:2vmin 0 0; padding:0; width:min(92vw,820px); }
+  #lbList li{ display:flex; align-items:center; gap:1.6vmin; padding:clamp(10px,1.7vmin,32px) clamp(14px,2.4vmin,40px);
+     margin-bottom:1vmin; border-radius:1.6vmin; background:rgba(255,255,255,.05); border:0.2vmin solid rgba(120,150,220,.22);
+     font-size:clamp(15px,2.8vmin,48px); }
+  #lbList li.you{ background:rgba(30,111,255,.18); border-color:var(--accent); }
+  #lbList li.empty{ justify-content:center; opacity:.6; }
+  #lbList .rk{ font-weight:900; opacity:.7; width:2.2em; text-align:center; }
+  #lbList .nm{ flex:1; text-align:left; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #lbList .nm .ph{ opacity:.5; font-weight:600; }
+  #lbList .mt{ font-weight:800; color:var(--accent); white-space:nowrap; }
+  #lbNote{ margin-top:1.4vmin; opacity:.8; font-size:clamp(12px,2vmin,34px); min-height:1em; }
 </style>
 </head>
 <body>
@@ -192,6 +219,14 @@
     <div class="scoreBig" id="finalScore">0</div>
     <div class="caughtLbl" id="tierMsg">criminals</div>
     <button class="btn" id="revealBtn" style="margin-top:26px;">See Your Prize</button>
+  </div>
+
+  <div class="overlay hidden" id="leaderboard">
+    <div class="lbTitle">🏆 Top 5 — Most Caught</div>
+    <div id="lbEntry"></div>
+    <ol id="lbList"></ol>
+    <div id="lbNote"></div>
+    <button class="btn" id="lbPlay" style="margin-top:3vmin;">▶ Play again</button>
   </div>
 
   <button id="gear" aria-label="Settings">⚙</button>
@@ -251,15 +286,16 @@
       criminalImage: BAKED_CRIMINAL,
       unitImage: null,                     // unused — the unit is painted into the range image
       night: 0.6,                          // darkness overlay strength (0..0.9)
-      spotlight: 120,                      // searchlight disc radius (px @ ~900 min-dim)
+      spotlight: 120,                      // searchlight disc size (relative to scene width)
       spotlightOrigin: { x: 29.7, y: 14 }, // LIGHT SOURCE as % of the RANGE IMAGE (the painted LVT unit's lamp)
       timeLimit: 30,
       spawnInterval: 1000,
       visibleDuration: 1500,
-      /* cover spots as % of the RANGE IMAGE (behind vehicles) — mapped through cover */
+      /* cover spots as % of the RANGE IMAGE — kept in the x≈23-77% band that stays
+         visible on a 9:16 portrait kiosk (behind the central vehicles) */
       coverSpots: [
-        {x:17,y:50},{x:34,y:41},{x:40,y:51},{x:49,y:45},{x:51,y:38},
-        {x:63,y:52},{x:73,y:43},{x:77,y:50},{x:84,y:39},{x:92,y:51}
+        {x:31,y:44},{x:37,y:52},{x:43,y:49},{x:49,y:44},{x:54,y:37},
+        {x:59,y:51},{x:64,y:52},{x:69,y:45},{x:73,y:43},{x:46,y:39}
       ],
       prizes: [
         { id:"p1", name:"Sticker",  color:"#38bdf8", qty:100, minScore:0,  icon:null, winImage:null },
@@ -305,9 +341,11 @@
 
   function applyConfig(){
     document.documentElement.style.setProperty("--accent", cfg.accent);
-    document.body.style.background = (cfg.bgType==="image" && cfg.bgImage) ? "#000" : (cfg.bgColor||"#05070d");
-    if(cfg.rangeImage){ scene.style.backgroundImage="url("+cfg.rangeImage+")"; defaultRange.style.display="none"; }
-    else if(cfg.bgType==="image" && cfg.bgImage){ scene.style.backgroundImage="url("+cfg.bgImage+")"; defaultRange.style.display="none"; }
+    // letterbox / body fill: a night gradient behind the scene so the portrait bands read as sky/interior
+    document.body.style.background = cfg.rangeImage ? "linear-gradient(180deg,#0a1224 0%,#070b16 45%,#03040a 100%)"
+      : ((cfg.bgType==="image" && cfg.bgImage) ? "#000" : (cfg.bgColor||"#05070d"));
+    if(cfg.rangeImage){ scene.style.backgroundImage="url("+cfg.rangeImage+")"; defaultRange.style.display="none"; layoutScene(); }
+    else if(cfg.bgType==="image" && cfg.bgImage){ scene.style.backgroundImage="url("+cfg.bgImage+")"; scene.style.backgroundSize="cover"; scene.style.backgroundPosition="center"; defaultRange.style.display="none"; }
     else { scene.style.backgroundImage=""; defaultRange.style.display="block"; buildDefaultRange(); }
 
     // The searchlight unit is painted into the range image — no overlay sprite.
@@ -315,7 +353,7 @@
     if(cfg.rangeImage){
       unitBox.style.display = "none";
       const im = new Image();
-      im.onload = ()=>{ rangeNatW = im.naturalWidth||rangeNatW; rangeNatH = im.naturalHeight||rangeNatH; };
+      im.onload = ()=>{ rangeNatW = im.naturalWidth||rangeNatW; rangeNatH = im.naturalHeight||rangeNatH; layoutScene(); };
       im.src = cfg.rangeImage;
     }else{
       unitBox.style.display = "block";
@@ -326,23 +364,34 @@
     $("#timeVal").textContent = cfg.timeLimit;
   }
 
-  /* Map a point given as % of the RANGE IMAGE to on-screen px, honoring
-     background-size:cover + center, so it tracks the painted scene at any aspect. */
+  /* The displayed rectangle of the range image on screen. Landscape screens use
+     cover (fill). Tall portrait screens (like the 2160x3840 kiosk) would crop the
+     wide scene down to a sliver with cover, so we fill the WIDTH and zoom a little
+     (capped at cover) — keeping the painted LVT tower + play area on screen, with
+     a letterbox top/bottom that the UI fills. */
+  const PORTRAIT_ZOOM = 1.85;
+  function sceneRect(){
+    const r = app().getBoundingClientRect();
+    if(!cfg.rangeImage) return { left:0, top:0, w:r.width, h:r.height };
+    const fitW = r.width/rangeNatW;
+    const cover = Math.max(fitW, r.height/rangeNatH);
+    const scale = (r.height > r.width) ? Math.min(cover, fitW*PORTRAIT_ZOOM) : cover;
+    const w = rangeNatW*scale, h = rangeNatH*scale;
+    return { left:(r.width-w)/2, top:(r.height-h)/2, w, h };
+  }
+  function layoutScene(){
+    if(!cfg.rangeImage) return;
+    const b = sceneRect();
+    scene.style.backgroundSize = b.w+"px "+b.h+"px";
+    scene.style.backgroundPosition = b.left+"px "+b.top+"px";
+    scene.style.backgroundRepeat = "no-repeat";
+  }
+  /* Map a point given as % of the RANGE IMAGE to on-screen px (tracks sceneRect). */
   function imgToScreen(fxPct, fyPct){
-    const r = app().getBoundingClientRect();
-    const fx = fxPct/100, fy = fyPct/100;
-    if(!cfg.rangeImage) return { x:r.width*fx, y:r.height*fy };
-    const scale = Math.max(r.width/rangeNatW, r.height/rangeNatH);
-    const dw = rangeNatW*scale, dh = rangeNatH*scale;
-    const ox = (r.width-dw)/2, oy = (r.height-dh)/2;
-    return { x: ox + fx*dw, y: oy + fy*dh };
+    const b = sceneRect();
+    return { x: b.left + (fxPct/100)*b.w, y: b.top + (fyPct/100)*b.h };
   }
-  function coverScaleH(){
-    const r = app().getBoundingClientRect();
-    if(!cfg.rangeImage) return r.height;
-    const scale = Math.max(r.width/rangeNatW, r.height/rangeNatH);
-    return rangeNatH*scale;
-  }
+  function coverScaleH(){ return sceneRect().h; }
   function layoutUnit(){ /* no overlay unit — painted into the scene */ }
   function lampPoint(){ return imgToScreen(cfg.spotlightOrigin.x, cfg.spotlightOrigin.y); }
   function app(){ return $("#app"); }
@@ -377,9 +426,10 @@
   let state=STATE.IDLE, score=0, timeLeft=0, lastTs=0, spawnAcc=0, acc=0, rafId=0;
   const criminals=[]; let wonPrize=null;
   let spotlights=[]; // {x,y,born}
+  let pendingScore=0, pendingPrizeName="";   // the just-finished run, fed to the leaderboard
 
   function crimH(){ return Math.max(52, Math.min(138, Math.round(coverScaleH()*0.115))); }
-  function discRadius(){ const s=Math.min(innerWidth,innerHeight); return (cfg.spotlight||120) * Math.max(.6, Math.min(1.5, s/900)); }
+  function discRadius(){ return sceneRect().w * ((cfg.spotlight||120)/1400); }
 
   function spawnCriminal(){
     const spots=cfg.coverSpots.filter(Boolean); if(!spots.length) return;
@@ -473,7 +523,7 @@
   function startGame(){
     score=0; wonPrize=null; $("#scoreVal").textContent="0";
     timeLeft=Number(cfg.timeLimit)||30; $("#timeVal").textContent=Math.ceil(timeLeft); $("#timePill").classList.remove("low");
-    clearCriminals(); spotlights=[]; sizeDark(); layoutUnit();
+    clearCriminals(); spotlights=[]; sizeDark(); layoutScene();
     $("#startOverlay").classList.add("hidden"); $("#overOverlay").classList.add("hidden");
     state=STATE.PLAYING; lastTs=performance.now(); spawnAcc=0; acc=0;
     cancelAnimationFrame(rafId); rafId=requestAnimationFrame(loop);
@@ -497,6 +547,7 @@
   function endGame(){
     state=STATE.OVER; cancelAnimationFrame(rafId); clearCriminals(); spotlights=[]; clearDarkness();
     $("#finalScore").textContent=score; wonPrize=pickPrize(score);
+    pendingScore=score; pendingPrizeName = wonPrize?wonPrize.name:"";
     $("#tierMsg").textContent = score===1?"criminal":"criminals";
     $("#overOverlay").classList.remove("hidden");
   }
@@ -516,16 +567,72 @@
     else{ img.style.display="none"; txt.style.display="flex"; $("#winnerTextName").textContent=prize?prize.name:"Thanks for playing!"; txt.querySelector(".ws").textContent=prize?"You won!":"No prize this time"; }
     winnerEl.classList.add("show"); fireConfetti();
   }
-  function dismissWinner(){ winnerEl.classList.remove("show"); stopConfetti(); resetToStart(); }
+  function dismissWinner(){ winnerEl.classList.remove("show"); stopConfetti(); showLeaderboard(); }
   winnerEl.addEventListener("touchstart",(e)=>{ e.preventDefault(); dismissWinner(); }, {passive:false});
   winnerEl.addEventListener("click",()=>dismissWinner());
   function resetToStart(){
     state=STATE.IDLE; score=0; wonPrize=null; spotlights=[]; clearDarkness();
     $("#scoreVal").textContent="0"; $("#timeVal").textContent=cfg.timeLimit;
+    $("#leaderboard").classList.add("hidden");
     $("#overOverlay").classList.add("hidden"); $("#startOverlay").classList.remove("hidden"); buildTierLegend();
   }
   bindTap($("#revealBtn"),()=>{ commitWin(wonPrize); showWinner(wonPrize); });
   bindTap($("#startBtn"), startGame);
+
+  /* ---------------- Leaderboard (per-device; NOT part of config.json) ---------------- */
+  const LB_KEY = "lvt_" + GAME_ID + "_leaderboard_v1";
+  let leaderboard = (function(){ try{ const raw=localStorage.getItem(LB_KEY); if(raw){ const a=JSON.parse(raw); if(Array.isArray(a)) return a.slice(0,5); } }catch(e){} return []; })();
+  function saveLeaderboard(){ try{ localStorage.setItem(LB_KEY, JSON.stringify(leaderboard.slice(0,5))); }catch(e){} }
+  function lbQualifies(sc){ return sc>0 && (leaderboard.length<5 || sc > leaderboard[leaderboard.length-1].score); }
+  function escapeHtml(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  const RANKS=["🥇","🥈","🥉"];
+  let lbPending=null;
+  const lbEl=$("#leaderboard"), lbEntryEl=$("#lbEntry"), lbListEl=$("#lbList"), lbNoteEl=$("#lbNote"), lbPlayEl=$("#lbPlay");
+
+  function showLeaderboard(){
+    $("#overOverlay").classList.add("hidden"); $("#startOverlay").classList.add("hidden");
+    lbPending = lbQualifies(pendingScore) ? { score:pendingScore, prize:pendingPrizeName, name:"", saved:false, ts:0 } : null;
+    renderLeaderboard();
+    lbEl.classList.remove("hidden");
+    const inp=$("#lbName"); if(inp){ try{ inp.focus(); }catch(e){} }
+  }
+  function lbRows(){
+    let rows = leaderboard.map(e=>({ name:e.name, score:e.score, ts:e.ts, you: !!(lbPending&&lbPending.saved&&e.ts===lbPending.ts) }));
+    if(lbPending && !lbPending.saved){ rows.push({ name:lbPending.name, score:lbPending.score, ts:0, you:true, pending:true }); rows.sort((a,b)=> b.score-a.score); }
+    return rows.slice(0,5);
+  }
+  function renderLeaderboard(){
+    const rows=lbRows();
+    lbListEl.innerHTML = rows.length ? rows.map((e,i)=>{
+      const rk = RANKS[i] || (i+1);
+      const nm = e.pending ? (e.name?escapeHtml(e.name):'<span class="ph">— your name —</span>') : escapeHtml(e.name||"Player");
+      return `<li class="${e.you?'you':''}"><span class="rk">${rk}</span><span class="nm">${nm}</span><span class="mt">${e.score} caught</span></li>`;
+    }).join("") : '<li class="empty">No scores yet — be the first!</li>';
+
+    if(lbPending && !lbPending.saved){
+      lbEntryEl.style.display="";
+      lbEntryEl.innerHTML = `<div class="lbNew">🎉 New High Score — ${lbPending.score} caught!</div>`+
+        `<div class="lbRow"><input id="lbName" type="text" maxlength="14" placeholder="Enter your name" value="${escapeHtml(lbPending.name)}"><button id="lbSave" type="button">Save</button></div>`;
+      lbNoteEl.textContent=""; lbPlayEl.style.display="none";
+      const inp=$("#lbName");
+      inp.addEventListener("input",()=>{ lbPending.name=inp.value; const cell=lbListEl.querySelector("li.you .nm"); if(cell) cell.innerHTML=inp.value?escapeHtml(inp.value):'<span class="ph">— your name —</span>'; });
+      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); commitPending(); } });
+      bindTap($("#lbSave"), commitPending);
+    } else {
+      lbEntryEl.style.display="none"; lbEntryEl.innerHTML=""; lbPlayEl.style.display="";
+      if(lbPending && lbPending.saved){ lbNoteEl.textContent="Score saved!"; }
+      else { const need = leaderboard.length>=5 ? leaderboard[4].score+1 : 0; lbNoteEl.textContent = pendingScore>0 ? ("You caught "+pendingScore+"."+(need?" Top 5 needs "+need+".":"")) : ""; }
+    }
+  }
+  function commitPending(){
+    if(!lbPending || lbPending.saved) return;
+    const inp=$("#lbName"); const name=(inp&&inp.value.trim())?inp.value.trim().slice(0,14):"Player"; const ts=Date.now();
+    leaderboard.push({ name, score:lbPending.score, ts });
+    leaderboard.sort((a,b)=> b.score-a.score || (a.ts||0)-(b.ts||0));
+    leaderboard = leaderboard.slice(0,5); saveLeaderboard();
+    lbPending.name=name; lbPending.saved=true; lbPending.ts=ts; renderLeaderboard();
+  }
+  bindTap(lbPlayEl, ()=>{ lbEl.classList.add("hidden"); resetToStart(); });
 
   const confCanvas=$("#confetti"), cctx=confCanvas.getContext("2d");
   let confParts=[], confRaf=0, confActive=false;
@@ -661,6 +768,9 @@
       <p class="hint">Winner = highest tier whose <b>Min Score</b> ≤ criminals caught (and still in stock). Inventory drops by 1 on win; at 0 the tier is removed and players fall to the next lower tier.</p>
       <div id="prizeList"></div>
       <button class="btnMini accent" id="addPrize">➕ Add prize / tier</button>`));
+    b.appendChild(section("Leaderboard",`
+      <button class="btnMini danger" id="resetLb">🏆 Reset leaderboard (clear scores)</button>
+      <p class="hint">Clears the top-5 high scores. Scores are stored per device on this kiosk and are <b>not</b> part of the exported config.json.</p>`));
     wireAdmin(); renderSpotEditor(); renderPrizeList(); $("#saveState").textContent="";
   }
 
@@ -686,6 +796,7 @@
     bindTap($("#mode_clear"),()=>{ cfg.coverSpots=[]; renderSpotEditor(); });
     bindTap($("#mode_reset"),()=>{ cfg.coverSpots=defaultConfig().coverSpots; renderSpotEditor(); });
     bindTap($("#addPrize"),()=>{ cfg.prizes.push({ id:"p"+Date.now(), name:"New Prize", color:"#8b5cf6", qty:10, minScore:0, icon:null, winImage:null }); renderPrizeList(); });
+    bindTap($("#resetLb"),()=>{ if(!confirm("Clear the leaderboard? This removes all top-5 scores on this device.")) return; leaderboard=[]; saveLeaderboard(); alert("Leaderboard cleared."); });
     $("#saveBtn").onclick=doSave; $("#exportBtn").onclick=doExport;
   }
   function hookUpload(btnId,prevId,clrId,cap,mode,setter){
@@ -763,7 +874,7 @@
 
   /* ---------------- Resize ---------------- */
   let resizeT=0;
-  window.addEventListener("resize",()=>{ clearTimeout(resizeT); resizeT=setTimeout(()=>{ if(state===STATE.PLAYING) sizeDark(); const s=crimH(); criminals.forEach(c=>{ c.el.style.setProperty("--crimH",s+"px"); const p=imgToScreen(c.x,c.y); c.el.style.left=p.x+"px"; c.el.style.top=p.y+"px"; }); if(confActive)sizeConf(); },120); });
+  window.addEventListener("resize",()=>{ clearTimeout(resizeT); resizeT=setTimeout(()=>{ layoutScene(); if(state===STATE.PLAYING) sizeDark(); const s=crimH(); criminals.forEach(c=>{ c.el.style.setProperty("--crimH",s+"px"); const p=imgToScreen(c.x,c.y); c.el.style.left=p.x+"px"; c.el.style.top=p.y+"px"; }); if(confActive)sizeConf(); },120); });
 
   boot();
 })();
