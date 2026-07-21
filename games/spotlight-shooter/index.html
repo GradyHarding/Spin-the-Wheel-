@@ -138,7 +138,7 @@
      display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.6);}
   #admin .hd{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid #1e2740;}
   #admin .hd h2{margin:0; font-size:18px;}
-  #admin .body{flex:1 1 auto; min-height:0; overflow-y:auto; padding:18px; -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain;}
+  #admin .body{flex:1 1 auto; min-height:0; overflow-y:scroll; padding:18px; -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain;}
   #admin .foot{padding:14px 18px; border-top:1px solid #1e2740; display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;}
   .sec{border:1px solid #1e2740; border-radius:12px; padding:14px; margin-bottom:16px;}
   .sec h3{margin:0 0 12px; font-size:13px; letter-spacing:.12em; text-transform:uppercase; opacity:.75;}
@@ -654,7 +654,17 @@
   function stopConfetti(){ confActive=false; cancelAnimationFrame(confRaf); cctx.clearRect(0,0,confCanvas.width,confCanvas.height); confCanvas.classList.remove("show"); }
 
   /* ---------------- Tap helper ---------------- */
-  function bindTap(el,fn){ if(!el)return; let h=0; el.addEventListener("touchstart",(e)=>{ e.preventDefault(); h=performance.now(); fn(e); },{passive:false}); el.addEventListener("click",(e)=>{ if(performance.now()-h<600)return; fn(e); }); }
+  /* Tap binding that DOESN'T block scrolling. touchstart stays passive (so a drag
+     that begins on a button can still scroll the ⚙ panel on iPad); the action only
+     fires on touchend if the finger didn't move (a real tap). Mouse falls back to click. */
+  function bindTap(el,fn){
+    if(!el) return;
+    let sx=0, sy=0, moved=false, lastTouch=0;
+    el.addEventListener("touchstart",(e)=>{ moved=false; const t=e.changedTouches[0]; sx=t.clientX; sy=t.clientY; }, {passive:true});
+    el.addEventListener("touchmove",(e)=>{ const t=e.changedTouches[0]; if(Math.abs(t.clientX-sx)>8 || Math.abs(t.clientY-sy)>8) moved=true; }, {passive:true});
+    el.addEventListener("touchend",(e)=>{ lastTouch=performance.now(); if(moved) return; e.preventDefault(); fn(e); }, {passive:false});
+    el.addEventListener("click",(e)=>{ if(performance.now()-lastTouch<700) return; fn(e); });
+  }
 
   /* ---------------- Image compression ---------------- */
   function compressImage(file, maxEdge){
@@ -826,7 +836,11 @@
     $("#spotCount").textContent=cfg.coverSpots.length+" cover spot(s). Tap a numbered marker to remove it. 🔦 = the searchlight unit in the scene.";
     const place=(cx,cy)=>{ const r=holder.getBoundingClientRect(); const x=Math.max(0,Math.min(100,((cx-r.left)/r.width)*100)); const y=Math.max(0,Math.min(100,((cy-r.top)/r.height)*100)); if(editMode==="origin"){ cfg.spotlightOrigin={x:round1(x),y:round1(y)}; } else cfg.coverSpots.push({x:round1(x),y:round1(y)}); renderSpotEditor(); };
     const onEdge=(t)=> t===holder || (t.tagName==="IMG");
-    holder.ontouchstart=(e)=>{ if(!onEdge(e.target))return; e.preventDefault(); const t=e.changedTouches[0]; place(t.clientX,t.clientY); };
+    // tap-aware so dragging across the preview scrolls the panel instead of placing a spot
+    let esx=0, esy=0, emoved=false;
+    holder.ontouchstart=(e)=>{ if(!onEdge(e.target))return; const t=e.changedTouches[0]; esx=t.clientX; esy=t.clientY; emoved=false; };
+    holder.ontouchmove=(e)=>{ const t=e.changedTouches[0]; if(Math.abs(t.clientX-esx)>8||Math.abs(t.clientY-esy)>8) emoved=true; };
+    holder.ontouchend=(e)=>{ if(!onEdge(e.target)||emoved)return; e.preventDefault(); place(esx,esy); };
     holder.onclick=(e)=>{ if(!onEdge(e.target))return; place(e.clientX,e.clientY); };
   }
   function renderMarkers(holder){
