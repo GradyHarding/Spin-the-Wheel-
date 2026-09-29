@@ -359,16 +359,20 @@ function getImg(src) {
 }
 
 /* ---------------------------- Persistence ---------------------------- */
+// Safe deep-clone: structuredClone isn't available on older/embedded kiosk
+// browsers, and an unguarded call to it throws before the page can render.
+// JSON round-tripping covers DEFAULT_CONFIG's plain data and works everywhere.
+function deepClone(x) { return JSON.parse(JSON.stringify(x)); }
 const hadLocalConfig = (() => { try { return !!localStorage.getItem(STORAGE_KEY); } catch (e) { return false; } })();
 function loadConfig() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return Object.assign(structuredClone(DEFAULT_CONFIG), parsed);
+      return Object.assign(deepClone(DEFAULT_CONFIG), parsed);
     }
   } catch (e) { /* ignore corrupt storage */ }
-  return structuredClone(DEFAULT_CONFIG);
+  return deepClone(DEFAULT_CONFIG);
 }
 function saveConfig() {
   config.updatedAt = Date.now();   // stamp so the newest version wins across devices
@@ -387,7 +391,7 @@ async function loadPublishedConfig() {
   if (!published) return;
   const localTs = hadLocalConfig ? (config.updatedAt || 0) : -1;   // no local draft → published always wins
   if ((published.updatedAt || 0) >= localTs) {
-    config = Object.assign(structuredClone(DEFAULT_CONFIG), published);
+    config = Object.assign(deepClone(DEFAULT_CONFIG), published);
     nextId = Math.max(0, ...config.segments.map(s => s.id)) + 1;
     applyGlobals();
     syncGlobalInputs();
@@ -1247,7 +1251,7 @@ document.getElementById('exportConfig').addEventListener('click', exportConfigFi
 
 // Reset
 document.getElementById('resetData').addEventListener('click', () => {
-  config = structuredClone(DEFAULT_CONFIG);
+  config = deepClone(DEFAULT_CONFIG);
   nextId = Math.max(0, ...config.segments.map(s => s.id)) + 1;
   saveConfig(); syncGlobalInputs(); renderSegmentList(); applyGlobals(); rotation = 0; drawWheel(); updatePoolNote();
 });
