@@ -567,6 +567,12 @@ input[type="color"].hub-color {
   /* ==========================================================================
      CUSTOMIZATION STORE  (persisted to localStorage)
      ========================================================================= */
+  // Safe deep-clone: structuredClone isn't available on older/embedded kiosk
+  // browsers (e.g. the ViewSonic display's browser), and an unguarded call to
+  // it throws before anything else on the page can run. JSON round-tripping
+  // covers everything HUB_DEFAULTS / config.json actually contain (plain
+  // objects, arrays, strings, numbers) and works everywhere.
+  function deepClone(x) { return JSON.parse(JSON.stringify(x)); }
   const HUB_STORE = "lvt_game_hub_v1";
   const HUB_DEFAULTS = {
     hubTitle: "LVT Game Hub",
@@ -581,8 +587,8 @@ input[type="color"].hub-color {
   };
   const hadLocalHub = (function(){ try { return !!localStorage.getItem(HUB_STORE); } catch (e) { return false; } })();
   function hubLoad() {
-    try { const r = localStorage.getItem(HUB_STORE); if (r) return Object.assign(structuredClone(HUB_DEFAULTS), JSON.parse(r)); } catch (e) {}
-    return structuredClone(HUB_DEFAULTS);
+    try { const r = localStorage.getItem(HUB_STORE); if (r) return Object.assign(deepClone(HUB_DEFAULTS), JSON.parse(r)); } catch (e) {}
+    return deepClone(HUB_DEFAULTS);
   }
   let hubCfg = hubLoad();
   function hubSave() {
@@ -826,7 +832,7 @@ input[type="color"].hub-color {
 
     document.getElementById("cfg-export").addEventListener("click", exportHubConfig);
     document.getElementById("cfg-reset-all").addEventListener("click", function () {
-      hubCfg = structuredClone(HUB_DEFAULTS); hubSave(); syncGlobal(); renderGameEditors(); applyHub(); renderGrid();
+      hubCfg = deepClone(HUB_DEFAULTS); hubSave(); syncGlobal(); renderGameEditors(); applyHub(); renderGrid();
     });
 
     // ---- Per-game editors ----
@@ -889,7 +895,7 @@ input[type="color"].hub-color {
       if (!published) return;
       const localTs = hadLocalHub ? (hubCfg.updatedAt || 0) : -1;   // no local draft → published wins
       if ((published.updatedAt || 0) >= localTs) {
-        hubCfg = Object.assign(structuredClone(HUB_DEFAULTS), published);
+        hubCfg = Object.assign(deepClone(HUB_DEFAULTS), published);
         applyHub(); renderGrid();
       }
     }
