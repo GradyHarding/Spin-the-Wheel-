@@ -69,7 +69,7 @@
   --transition-view:    380ms cubic-bezier(0.16, 1, 0.3, 1);
 
   /* --- Layout ---------------------------------------------------------- */
-  --card-min-width:  clamp(220px, 26vw, 340px);  /* Grid auto-fit floor  */
+  --card-min-width:  280px;  /* Grid auto-fit floor  */
   --hub-max-width:   1400px;
 }
 
@@ -105,7 +105,7 @@ body {
    ========================================================================== */
 #hub {
   position: absolute;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   height: 100%;                      /* ← iOS won't scroll a top/bottom-sized box without this */
   display: flex;
   flex-direction: column;
@@ -197,11 +197,11 @@ body.game-active #hub {
 }
 
 .game-card__thumb {
-  aspect-ratio: 16 / 10;
+  position: relative;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 0;
+  padding-top: 62.5%;                /* 16:10 without aspect-ratio (old kiosk browsers) */
+  overflow: hidden;
   font-size: calc(4rem * var(--font-scale));
   /* Per-card accent is injected inline from the registry */
   background:
@@ -209,6 +209,11 @@ body.game-active #hub {
       var(--card-accent, var(--color-primary)) 0%,
       transparent 70%),
     var(--bg-surface-2);
+}
+
+.game-card__thumb-in {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  display: flex; align-items: center; justify-content: center;
 }
 
 .game-card__body {
@@ -248,7 +253,7 @@ body.game-active #hub {
    ========================================================================== */
 #viewport {
   position: absolute;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   width: 100vw;
   height: 100vh;
   height: 100dvh;                   /* Respect mobile browser chrome */
@@ -323,7 +328,7 @@ body.game-active.controls-hidden #exit-bar {
 /* Small loading shimmer shown while an iframe boots */
 #loader {
   position: fixed;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   z-index: 15;
   display: none;
   align-items: center;
@@ -367,7 +372,7 @@ body.game-loading #loader { display: flex; }
 body.game-active #hub-gear { display: none; }   /* hide while a game is open */
 
 #hub-drawer-backdrop {
-  position: fixed; inset: 0; z-index: 30;
+  position: fixed; top:0;right:0;bottom:0;left:0; z-index: 30;
   background: var(--bg-overlay); display: none;
 }
 #hub-drawer-backdrop.open { display: block; }
@@ -456,7 +461,7 @@ input[type="color"].hub-color {
   <div id="loader"><div class="spinner"></div>Loading game…</div>
 
   <!-- Idle screensaver / attract overlay -->
-  <div id="screensaver" style="position:fixed;inset:0;z-index:90;display:none;background:#000 center/cover no-repeat;cursor:pointer;"></div>
+  <div id="screensaver" style="position:fixed;top:0;right:0;bottom:0;left:0;z-index:90;display:none;background:#000 center/cover no-repeat;cursor:pointer;"></div>
 
   <div id="exit-bar">
     <button class="exit-btn" id="exit-btn" type="button" aria-label="Return to hub" title="Return to hub">
@@ -679,7 +684,7 @@ input[type="color"].hub-color {
           ? '<img src="' + escapeAttr(img) + '" alt="" style="width:100%;height:100%;object-fit:cover" />'
           : (game.icon || "🎮");
         card.innerHTML =
-          '<div class="game-card__thumb">' + thumbInner + '</div>' +
+          '<div class="game-card__thumb"><div class="game-card__thumb-in">' + thumbInner + '</div></div>' +
           '<div class="game-card__body">' +
             '<h2 class="game-card__title">' + escapeHtml(gval(game, "title")) + '</h2>' +
             '<p class="game-card__desc">' + escapeHtml(gval(game, "description") || "") + '</p>' +
@@ -688,7 +693,8 @@ input[type="color"].hub-color {
         card.addEventListener("click", function () { launchGame(game); });
         frag.appendChild(card);
       });
-      grid.replaceChildren(frag);
+      while (grid.firstChild) grid.removeChild(grid.firstChild);
+      grid.appendChild(frag);
     }
 
     /* ---- Launcher (iframe) ---------------------------------------------- */
@@ -732,7 +738,7 @@ input[type="color"].hub-color {
       if (__settingsUnlocked) { onSuccess(); return; }
       let entry = "";
       const ov = document.createElement("div");
-      ov.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.78);";
+      ov.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.78);";
       const panel = document.createElement("div");
       panel.style.cssText = "background:var(--bg-surface);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:24px;width:280px;max-width:88vw;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6);";
       const title = document.createElement("div");

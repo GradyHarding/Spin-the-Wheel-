@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kiosk Diagnostic</title>
+<style>
+body{margin:0;padding:24px;background:#0b1020;color:#fff;font:22px/1.4 Arial,sans-serif}
+h1{margin:0 0 8px;font-size:30px}
+.ua{word-break:break-all;background:#1c2540;padding:12px;border-radius:8px;font-size:18px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%}
+td{padding:8px 10px;border-bottom:1px solid #2a3556}
+.ok{color:#4ade80;font-weight:bold}.no{color:#f87171;font-weight:bold}
+</style></head><body>
+<h1>Kiosk Diagnostic</h1>
+<div>Take a photo of this screen and send it over.</div>
+<div class="ua" id="ua"></div>
+<div id="summary" style="margin-bottom:12px;font-size:26px"></div>
+<table id="t"></table>
+<script>
+(function(){
+  var rows=[], bad=0;
+  function add(name,ok){ rows.push([name,ok]); if(!ok) bad++; }
+  function css(p,v){ try{ return !!(window.CSS && CSS.supports && CSS.supports(p,v)); }catch(e){ return false; } }
+  function js(fn){ try{ return !!fn(); }catch(e){ return false; } }
+  var m=(navigator.userAgent||"").match(/Chrom(?:e|ium)\/(\d+)/);
+  document.getElementById("ua").textContent=navigator.userAgent+"  |  screen "+screen.width+"x"+screen.height+"  |  viewport "+innerWidth+"x"+innerHeight+"  |  dpr "+devicePixelRatio;
+  add("CSS  inset shorthand", css("inset","0"));
+  add("CSS  aspect-ratio", css("aspect-ratio","16/10"));
+  add("CSS  clamp()", css("width","clamp(1px,2px,3px)"));
+  add("CSS  min()", css("width","min(1px,2px)"));
+  add("CSS  dvh units", css("height","100dvh"));
+  add("CSS  container queries (cqw)", css("width","10cqw"));
+  add("CSS  flex gap", css("gap","4px"));
+  add("CSS  grid", css("display","grid"));
+  add("CSS  :focus-visible", js(function(){ document.querySelector(":focus-visible"); return true; }));
+  add("CSS  backdrop-filter", css("backdrop-filter","blur(2px)") || css("-webkit-backdrop-filter","blur(2px)"));
+  add("JS   structuredClone", typeof structuredClone==="function");
+  add("JS   replaceChildren", js(function(){ return typeof document.body.replaceChildren==="function"; }));
+  add("JS   optional chaining ?.", js(function(){ return new Function("var a=null;return a?.b===undefined")(); }));
+  add("JS   nullish ??", js(function(){ return new Function("return (null??1)===1")(); }));
+  add("JS   Array.at()", typeof [].at==="function");
+  add("JS   ctx.roundRect", js(function(){ return typeof CanvasRenderingContext2D.prototype.roundRect==="function"; }));
+  add("JS   fetch", typeof fetch==="function");
+  add("JS   localStorage", js(function(){ localStorage.setItem("_d","1"); localStorage.removeItem("_d"); return true; }));
+  add("JS   Web Audio", !!(window.AudioContext||window.webkitAudioContext));
+  add("JS   ResizeObserver", typeof ResizeObserver==="function");
+  var html="";
+  rows.forEach(function(r){ html+="<tr><td>"+r[0]+"</td><td class='"+(r[1]?"ok":"no")+"'>"+(r[1]?"YES":"NO")+"</td></tr>"; });
+  document.getElementById("t").innerHTML=html;
+  document.getElementById("summary").innerHTML="Chrome version: <b>"+(m?m[1]:"unknown")+"</b> &nbsp; Unsupported features: <b class='"+(bad?"no":"ok")+"'>"+bad+"</b>";
+})();
+</script>
+</body></html>
